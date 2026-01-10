@@ -1,0 +1,17 @@
+node_modules
+# Keep environment variables out of version control
+.env
+.env.local
+.env*.local
+
+# Next.js build output
+.next
+out
+
+# IDE
+.DS_Store
+*.swp
+.idea
+.vscode
+
+/lib/generated/prisma

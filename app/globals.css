@@ -1,0 +1,285 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+@import 'vditor/dist/index.css';
+
+@custom-variant dark (&:is(.dark *));
+
+:root {
+  --background: #ffffff;
+  --foreground: #000000;
+  --card: #ffffff;
+  --card-foreground: #000000;
+  --popover: #ffffff;
+  --popover-foreground: #000000;
+  --primary: #ff3333;
+  --primary-foreground: #ffffff;
+  --secondary: #ffff00;
+  --secondary-foreground: #000000;
+  --muted: #f0f0f0;
+  --muted-foreground: #333333;
+  --accent: #0066ff;
+  --accent-foreground: #ffffff;
+  --destructive: #000000;
+  --destructive-foreground: #ffffff;
+  --border: #000000;
+  --input: #000000;
+  --ring: #ff3333;
+  --chart-1: #ff3333;
+  --chart-2: #ffff00;
+  --chart-3: #0066ff;
+  --chart-4: #00cc00;
+  --chart-5: #cc00cc;
+  --radius: 0px;
+  --sidebar: #f0f0f0;
+  --sidebar-foreground: #000000;
+  --sidebar-primary: #ff3333;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #0066ff;
+  --sidebar-accent-foreground: #ffffff;
+  --sidebar-border: #000000;
+  --sidebar-ring: #ff3333;
+  --shadow-x: 4px;
+  --shadow-y: 4px;
+  --shadow-blur: 0px;
+  --shadow-spread: 0px;
+  --shadow-opacity: 1;
+  --shadow-color: #000000;
+  --vditor-surface: var(--card);
+  --vditor-surface-muted: color-mix(in srgb, var(--muted) 55%, var(--card));
+  --vditor-toolbar-icon: var(--muted-foreground);
+  --vditor-toolbar-icon-hover: var(--foreground);
+  --vditor-toolbar-icon-active: var(--primary);
+  --vditor-toolbar-icon-disabled: color-mix(in srgb, var(--muted-foreground) 55%, transparent);
+  --vditor-selection: color-mix(in srgb, var(--primary) 16%, transparent);
+  --vditor-ring: color-mix(in srgb, var(--ring) 85%, transparent);
+  --vditor-code-surface: color-mix(in srgb, var(--muted) 45%, var(--card));
+}
+
+.dark {
+  --background: #000000;
+  --foreground: #ffffff;
+  --card: #333333;
+  --card-foreground: #ffffff;
+  --popover: #333333;
+  --popover-foreground: #ffffff;
+  --primary: #ff6666;
+  --primary-foreground: #000000;
+  --secondary: #ffff33;
+  --secondary-foreground: #000000;
+  --muted: #333333;
+  --muted-foreground: #cccccc;
+  --accent: #3399ff;
+  --accent-foreground: #000000;
+  --destructive: #ffffff;
+  --destructive-foreground: #000000;
+  --border: #ffffff;
+  --input: #ffffff;
+  --ring: #ff6666;
+  --chart-1: #ff6666;
+  --chart-2: #ffff33;
+  --chart-3: #3399ff;
+  --chart-4: #33cc33;
+  --chart-5: #cc33cc;
+  --sidebar: #000000;
+  --sidebar-foreground: #ffffff;
+  --sidebar-primary: #ff6666;
+  --sidebar-primary-foreground: #000000;
+  --sidebar-accent: #3399ff;
+  --sidebar-accent-foreground: #000000;
+  --sidebar-border: #ffffff;
+  --sidebar-ring: #ff6666;
+  --shadow-x: 4px;
+  --shadow-y: 4px;
+  --shadow-blur: 0px;
+  --shadow-spread: 0px;
+  --shadow-opacity: 1;
+  --shadow-color: #000000;
+}
+
+@theme inline {
+  --font-sans: 'Bebas Neue', 'Bebas Neue Fallback';
+  --font-mono: 'Space Mono', 'Space Mono Fallback';
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --font-serif: 'PT Serif', 'PT Serif Fallback';
+  /* computed shadow variables below - do not modify */
+  --shadow-2xs: var(--shadow-x) var(--shadow-y) color-mix(in srgb, var(--shadow-color) calc(var(--shadow-opacity) * 100%), transparent);
+  --shadow-xs: var(--shadow-x) var(--shadow-y) var(--shadow-blur) var(--shadow-spread) color-mix(in srgb, var(--shadow-color) calc(var(--shadow-opacity) * 100%), transparent);
+  --shadow-sm: var(--shadow-x) var(--shadow-y) calc(var(--shadow-blur) * 1.5) var(--shadow-spread) color-mix(in srgb, var(--shadow-color) calc(var(--shadow-opacity) * 100%), transparent);
+  --shadow-md: calc(var(--shadow-x) * 2) calc(var(--shadow-y) * 2) calc(var(--shadow-blur) * 3) calc(var(--shadow-spread) - 1px) color-mix(in srgb, var(--shadow-color) calc(var(--shadow-opacity) * 100%), transparent);
+  --shadow-lg: calc(var(--shadow-x) * 4) calc(var(--shadow-y) * 4) calc(var(--shadow-blur) * 5) calc(var(--shadow-spread) - 3px) color-mix(in srgb, var(--shadow-color) calc(var(--shadow-opacity) * 100%), transparent);
+  --shadow-xl: calc(var(--shadow-x) * 6) calc(var(--shadow-y) * 6) calc(var(--shadow-blur) * 7) calc(var(--shadow-spread) - 5px) color-mix(in srgb, var(--shadow-color) calc(var(--shadow-opacity) * 100%), transparent);
+  --shadow-2xl: calc(var(--shadow-x) * 8) calc(var(--shadow-y) * 8) calc(max(0px, var(--shadow-blur) * 9 - 8px)) calc(var(--shadow-spread) - 12px) color-mix(in srgb, var(--shadow-color) calc(var(--shadow-opacity) * 250%), transparent);
+  --shadow: var(--shadow-md);
+  --color-shadow-color: var(--shadow-color);
+  --shadow-opacity: var(--shadow-opacity);
+  --shadow-spread: var(--shadow-spread);
+  --shadow-blur: var(--shadow-blur);
+  --shadow-y: var(--shadow-y);
+  --shadow-x: var(--shadow-x);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+/* TipTap Editor Heading Styles */
+.ProseMirror h1 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin-top: 1.5rem;
+  margin-bottom: 1rem;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 0.5rem;
+}
+
+.ProseMirror h2 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin-top: 1.25rem;
+  margin-bottom: 0.75rem;
+}
+
+.ProseMirror h3 {
+  font-size: 1.125rem;
+  font-weight: 600;
+  margin-top: 1rem;
+  margin-bottom: 0.5rem;
+}
+
+/* Vditor theme overrides */
+.vditor {
+  background-color: var(--vditor-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-xs);
+  color: var(--foreground);
+}
+
+.vditor * {
+  font-family: var(--font-sans);
+}
+
+.vditor .vditor-toolbar {
+  background-color: var(--vditor-surface-muted);
+  border-bottom: 1px solid var(--border);
+  color: var(--vditor-toolbar-icon);
+  gap: 0.25rem;
+  font-size: 14px;
+}
+
+.vditor .vditor-toolbar button,
+.vditor .vditor-toolbar span {
+  color: inherit;
+  border-radius: var(--radius-sm);
+  transition: color 120ms ease, background-color 120ms ease, box-shadow 120ms ease;
+}
+
+.vditor .vditor-toolbar button:hover,
+.vditor .vditor-toolbar span:hover {
+  color: var(--vditor-toolbar-icon-hover);
+  background-color: color-mix(in srgb, var(--muted) 35%, transparent);
+}
+
+.vditor .vditor-toolbar .vditor-menu--current {
+  color: var(--vditor-toolbar-icon-active);
+  background-color: color-mix(in srgb, var(--primary) 14%, transparent);
+}
+
+.vditor .vditor-toolbar .vditor-menu--disabled {
+  color: var(--vditor-toolbar-icon-disabled);
+  cursor: not-allowed;
+}
+
+.vditor .vditor-toolbar svg {
+  width: 16px;
+  height: 16px;
+  fill: currentColor;
+}
+
+.vditor .vditor-toolbar button,
+.vditor .vditor-toolbar .vditor-tooltipped {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  min-height: 28px;
+}
+
+.vditor .vditor-content,
+.vditor .vditor-wysiwyg,
+.vditor .vditor-textarea {
+  background-color: var(--vditor-surface);
+  color: var(--foreground);
+}
+
+.vditor .vditor-wysiwyg {
+  padding: 1rem;
+  border-color: var(--border);
+}
+
+.vditor .vditor-wysiwyg:focus-within {
+  outline: 2px solid var(--vditor-ring);
+  outline-offset: 0;
+}
+
+.vditor .vditor-wysiwyg pre,
+.vditor .vditor-wysiwyg code {
+  background-color: var(--vditor-code-surface);
+  color: var(--foreground);
+  border-radius: var(--radius-sm);
+}
+
+.vditor .vditor-counter,
+.vditor .vditor-resize {
+  color: var(--muted-foreground);
+  background-color: var(--vditor-surface);
+  border-color: var(--border);
+}
+
+.vditor .vditor-hint,
+.vditor .vditor-toolbar .vditor-menu__panel {
+  background-color: var(--popover);
+  color: var(--foreground);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-sm);
+}
