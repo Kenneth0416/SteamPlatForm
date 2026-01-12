@@ -1,12 +1,13 @@
 "use client"
 
 import { useState, useRef, useEffect } from "react"
-import type { Lang, ChatMessage } from "@/types/lesson"
+import type { Lang, ChatMessage, ToolCall } from "@/types/lesson"
+import type { PendingDiff } from "@/lib/editor/types"
 import { getTranslation } from "@/lib/translations"
 import { Card, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Send, User, Bot, ArrowLeft, Loader2, Wrench, ArrowDown } from "lucide-react"
+import { Send, User, Bot, ArrowLeft, Loader2, ArrowDown, CheckCircle2, XCircle, Wrench } from "lucide-react"
 import { ChatMarkdown } from "./chat-markdown"
 
 interface ChatPanelProps {
@@ -17,9 +18,10 @@ interface ChatPanelProps {
   isGenerating?: boolean
   initialMessages?: ChatMessage[]
   onMessagesChange?: (messages: ChatMessage[]) => void
+  onDiffsChange?: (diffs: PendingDiff[]) => void
 }
 
-export function ChatPanel({ lang, currentLesson, onLessonUpdate, onBackToForm, isGenerating, initialMessages, onMessagesChange }: ChatPanelProps) {
+export function ChatPanel({ lang, currentLesson, onLessonUpdate, onBackToForm, isGenerating, initialMessages, onMessagesChange, onDiffsChange }: ChatPanelProps) {
   const t = getTranslation(lang)
   const [messages, setMessages] = useState<ChatMessage[]>(initialMessages || [])
   const [inputValue, setInputValue] = useState("")
@@ -30,6 +32,22 @@ export function ChatPanel({ lang, currentLesson, onLessonUpdate, onBackToForm, i
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   const [isApplying, setIsApplying] = useState(false)
+
+  const ToolCallInline = ({ toolCall }: { toolCall: ToolCall }) => {
+    const statusIcon = toolCall.status === 'calling' ? (
+      <Loader2 className="h-3 w-3 animate-spin text-blue-500" />
+    ) : toolCall.status === 'success' ? (
+      <CheckCircle2 className="h-3 w-3 text-green-500" />
+    ) : (
+      <XCircle className="h-3 w-3 text-red-500" />
+    )
+    return (
+      <span className="inline-flex items-center gap-1.5 text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 px-2 py-1 rounded font-mono mr-1 mb-1">
+        {statusIcon}
+        {toolCall.name}
+      </span>
+    )
+  }
 
   // 当消息变化时通知父组件
   useEffect(() => {
@@ -102,6 +120,9 @@ export function ChatPanel({ lang, currentLesson, onLessonUpdate, onBackToForm, i
   const handleSend = async () => {
     if (!inputValue.trim() || isSending) return
 
+    // Clear previous diffs when sending new message
+    onDiffsChange?.([])
+
     const userMessage: ChatMessage = {
       id: `msg-${Date.now()}`,
       role: "user",
@@ -112,12 +133,13 @@ export function ChatPanel({ lang, currentLesson, onLessonUpdate, onBackToForm, i
     setInputValue("")
     setIsSending(true)
 
-    const aiMessageId = `msg-${Date.now() + 1}`
+    let aiMessageId = `msg-${Date.now() + 1}`
     const aiMessage: ChatMessage = {
       id: aiMessageId,
       role: "assistant",
       text: "",
       isStreaming: true,
+      toolCalls: [],
     }
     setMessages((prev) => [...prev, aiMessage])
 
@@ -136,6 +158,8 @@ export function ChatPanel({ lang, currentLesson, onLessonUpdate, onBackToForm, i
       const decoder = new TextDecoder()
       let fullText = ""
       let suggestedChange: string | undefined
+      let collectedDiffs: ChatMessage['diffs'] = []
+      let collectedToolCalls: ToolCall[] = []
 
       while (true) {
         const { done, value } = await reader.read()
@@ -151,27 +175,80 @@ export function ChatPanel({ lang, currentLesson, onLessonUpdate, onBackToForm, i
 
             try {
               const parsed = JSON.parse(data)
-              if (parsed.type === "content" && parsed.content) {
-                fullText += parsed.content
-                // 移除标记后显示
-                const displayText = fullText.replace(/\[(NEEDS_CHANGE|NO_CHANGE)\]/g, "").trim()
-                setMessages((prev) =>
-                  prev.map((m) =>
-                    m.id === aiMessageId ? { ...m, text: displayText } : m
-                  )
-                )
-              } else if (parsed.type === "suggested_change") {
-                // 包含用户问题和AI回复的完整对话上下文
-                suggestedChange = `User: ${inputValue}\n\nAssistant: ${fullText.replace(/\[(NEEDS_CHANGE|NO_CHANGE)\]/g, "").trim()}`
-              } else if (parsed.type === "done") {
+              if (parsed.type === "new_turn") {
+                // Capture current message ID before it changes
+                const currentMsgId = aiMessageId
+                // Finalize current message and create new one
                 const finalText = fullText.replace(/\[(NEEDS_CHANGE|NO_CHANGE)\]/g, "").trim()
+                const finalToolCalls = collectedToolCalls.length > 0 ? [...collectedToolCalls] : undefined
+                console.log('[chat-panel] new_turn: finalizing message', currentMsgId, 'with toolCalls:', finalToolCalls?.map(t => t.name))
                 setMessages((prev) =>
                   prev.map((m) =>
-                    m.id === aiMessageId
-                      ? { ...m, text: finalText, isStreaming: false, suggestedChange }
+                    m.id === currentMsgId
+                      ? { ...m, text: finalText, isStreaming: false, toolCalls: finalToolCalls }
                       : m
                   )
                 )
+                // Reset for new turn
+                fullText = ""
+                collectedToolCalls = []
+                aiMessageId = `msg-${Date.now()}`
+                const newAiMessage: ChatMessage = {
+                  id: aiMessageId,
+                  role: "assistant",
+                  text: "",
+                  isStreaming: true,
+                  toolCalls: [],
+                }
+                setMessages((prev) => [...prev, newAiMessage])
+              } else if (parsed.type === "tool_call" && parsed.toolCall) {
+                const tc = parsed.toolCall as ToolCall
+                const currentMsgId = aiMessageId
+                console.log('[chat-panel] Received tool_call:', tc.name, tc.status, 'for message:', currentMsgId)
+                const existingIdx = collectedToolCalls.findIndex(t => t.id === tc.id)
+                if (existingIdx >= 0) {
+                  collectedToolCalls[existingIdx] = tc
+                } else {
+                  collectedToolCalls.push(tc)
+                }
+                const toolCallsCopy = [...collectedToolCalls]
+                console.log('[chat-panel] collectedToolCalls:', toolCallsCopy.length, toolCallsCopy.map(t => t.name))
+                setMessages((prev) =>
+                  prev.map((m) =>
+                    m.id === currentMsgId ? { ...m, toolCalls: toolCallsCopy } : m
+                  )
+                )
+              } else if (parsed.type === "content" && parsed.content) {
+                fullText += parsed.content
+                const displayText = fullText.replace(/\[(NEEDS_CHANGE|NO_CHANGE)\]/g, "").trim()
+                const currentMsgId = aiMessageId
+                setMessages((prev) =>
+                  prev.map((m) =>
+                    m.id === currentMsgId ? { ...m, text: displayText } : m
+                  )
+                )
+              } else if (parsed.type === "suggested_change") {
+                suggestedChange = "true"
+              } else if (parsed.type === "diff" && parsed.diff) {
+                console.log('[chat-panel] Received diff:', parsed.diff)
+                collectedDiffs.push(parsed.diff)
+              } else if (parsed.type === "done") {
+                console.log('[chat-panel] Done. Total diffs collected:', collectedDiffs.length, collectedDiffs)
+                const finalText = fullText.replace(/\[(NEEDS_CHANGE|NO_CHANGE)\]/g, "").trim()
+                const currentMsgId = aiMessageId
+                const finalToolCalls = collectedToolCalls.length > 0 ? [...collectedToolCalls] : undefined
+                const finalDiffs = collectedDiffs.length > 0 ? [...collectedDiffs] : undefined
+                setMessages((prev) =>
+                  prev.map((m) =>
+                    m.id === currentMsgId
+                      ? { ...m, text: finalText, isStreaming: false, suggestedChange, diffs: finalDiffs, toolCalls: finalToolCalls }
+                      : m
+                  )
+                )
+                // Emit diffs to parent for preview highlighting
+                if (finalDiffs && onDiffsChange) {
+                  onDiffsChange(finalDiffs as PendingDiff[])
+                }
               }
             } catch {
               // ignore parse errors
@@ -193,7 +270,8 @@ export function ChatPanel({ lang, currentLesson, onLessonUpdate, onBackToForm, i
     }
   }
 
-  const handleApplyChanges = async (changeContent: string) => {
+  const handleApplyChanges = async (changeContent: string, diffs?: ChatMessage['diffs']) => {
+    console.log('[chat-panel] handleApplyChanges called with diffs:', diffs)
     if (!currentLesson || isApplying) return
 
     setIsApplying(true)
@@ -212,7 +290,7 @@ export function ChatPanel({ lang, currentLesson, onLessonUpdate, onBackToForm, i
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           currentLesson,
-          suggestedChange: changeContent,
+          diffs: diffs || [],
           lang,
         }),
       })
@@ -270,7 +348,11 @@ export function ChatPanel({ lang, currentLesson, onLessonUpdate, onBackToForm, i
               {lang === "en" ? "Start a conversation to refine your lesson plan" : "開始對話以優化您的課程計畫"}
             </div>
           )}
-          {messages.map((message) => (
+          {messages.map((message) => {
+              if (message.role === 'assistant' && !message.isThinking) {
+                console.log('[chat-panel] Rendering message:', message.id, 'text:', message.text?.slice(0, 30), 'toolCalls:', message.toolCalls?.map(t => t.name))
+              }
+              return (
               <div
                 key={message.id}
                 className={`flex gap-3 animate-in fade-in slide-in-from-bottom-2 duration-300 ${
@@ -289,23 +371,33 @@ export function ChatPanel({ lang, currentLesson, onLessonUpdate, onBackToForm, i
                 <div
                   className={`flex flex-col gap-2 max-w-[80%] ${message.role === "user" ? "items-end" : "items-start"}`}
                 >
-                  <div
-                    className={`rounded-lg px-4 py-2 text-sm transition-opacity duration-150 ${
-                      message.role === "user"
-                        ? "bg-primary text-primary-foreground"
-                        : message.isThinking
-                          ? "bg-muted/50 text-muted-foreground italic flex items-center gap-2"
-                          : "bg-muted"
-                    }`}
-                  >
-                    {message.isThinking && <Loader2 className="h-3 w-3 animate-spin" />}
-                    {message.isThinking ? (message.text || "") : <ChatMarkdown content={message.text || ""} />}
-                  </div>
-                  {message.suggestedChange && !message.isStreaming && (
-                    <Button size="sm" variant="outline" onClick={() => handleApplyChanges(message.suggestedChange!)} disabled={isApplying}>
-                      {isApplying ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : null}
-                      {t.applyChanges}
-                    </Button>
+                  {/* Message content with tool calls */}
+                  {(message.text || message.isThinking || (message.toolCalls && message.toolCalls.length > 0)) && (
+                    <div
+                      className={`rounded-lg px-4 py-2 text-sm transition-opacity duration-150 ${
+                        message.role === "user"
+                          ? "bg-primary text-primary-foreground"
+                          : message.isThinking
+                            ? "bg-muted/50 text-muted-foreground italic flex items-center gap-2"
+                            : "bg-muted"
+                      }`}
+                    >
+                      {message.isThinking && <Loader2 className="h-3 w-3 animate-spin" />}
+                      {message.isThinking ? (
+                        message.text || ""
+                      ) : (
+                        <>
+                          {message.text && <ChatMarkdown content={message.text} />}
+                          {message.toolCalls && message.toolCalls.length > 0 && (
+                            <div className={message.text ? "mt-1" : ""}>
+                              {message.toolCalls.map((tc) => (
+                                <ToolCallInline key={tc.id} toolCall={tc} />
+                              ))}
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </div>
                   )}
                 </div>
                 {message.role === "user" && (
@@ -314,7 +406,7 @@ export function ChatPanel({ lang, currentLesson, onLessonUpdate, onBackToForm, i
                   </div>
                 )}
               </div>
-            ))}
+            )})}
           <div ref={messagesEndRef} />
         </div>
 

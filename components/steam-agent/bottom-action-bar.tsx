@@ -13,6 +13,7 @@ import {
 import { Save, FileDown, Copy, Library, Loader2, ChevronDown } from "lucide-react"
 import { exportLessonPdf, exportLessonWord, saveLesson } from "@/lib/api"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { useToast } from "@/hooks/use-toast"
 import { loadSettings } from "@/lib/settingsStorage"
 import { downloadBlob } from "@/lib/download"
@@ -35,6 +36,7 @@ export function BottomActionBar({
 }: BottomActionBarProps) {
   const t = getTranslation(lang)
   const { toast } = useToast()
+  const router = useRouter()
   const [isExportingPdf, setIsExportingPdf] = useState(false)
   const [isExportingWord, setIsExportingWord] = useState(false)
   const hasLessonContent = Boolean(currentLesson && currentLesson.trim())
@@ -112,6 +114,16 @@ export function BottomActionBar({
     if (!currentLesson || !currentRequirements) return
 
     const saved = await saveLesson(currentLesson, currentRequirements, currentLessonId)
+
+    if (saved === 'auth_required') {
+      toast({
+        title: lang === "en" ? "Login Required" : "需要登入",
+        description: lang === "en" ? "Please login to save lessons" : "請登入以儲存課程",
+        variant: "destructive",
+      })
+      router.push('/auth/login')
+      return
+    }
 
     if (saved && onSaveSuccess) {
       onSaveSuccess(saved.id)

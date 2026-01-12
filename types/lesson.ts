@@ -57,11 +57,27 @@ export interface LessonPlan {
   lessonFlowDiagram?: string // Optional mermaid diagram for overall lesson flow
 }
 
+export interface ToolCall {
+  id: string
+  name: string
+  status: 'calling' | 'success' | 'error'
+  result?: string
+}
+
 export interface ChatMessage {
   id: string
   role: "user" | "assistant" | "system"
   text: string
   suggestedChange?: string
+  diffs?: Array<{
+    id: string
+    blockId: string
+    action: 'update' | 'add' | 'delete'
+    oldContent?: string
+    newContent?: string
+    reason?: string
+  }>
+  toolCalls?: ToolCall[]
   isThinking?: boolean // Added to indicate thinking/tool call messages
   isStreaming?: boolean // Added to indicate streaming message
 }

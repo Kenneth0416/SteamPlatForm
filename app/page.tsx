@@ -1,9 +1,10 @@
 "use client"
 
 import { useState, useEffect, useCallback, useRef } from "react"
-import { useSearchParams } from "next/navigation"
+import { useSearchParams, useRouter } from "next/navigation"
 import { useSession } from "next-auth/react"
 import type { Lang, LessonRequirements, ChatMessage } from "@/types/lesson"
+import type { PendingDiff } from "@/lib/editor/types"
 import { generateLessonDraft, getLessonById, updateLesson } from "@/lib/api"
 import { loadSettings } from "@/lib/settingsStorage"
 import { Header } from "@/components/layout/header"
@@ -14,6 +15,7 @@ import { BottomActionBar } from "@/components/steam-agent/bottom-action-bar"
 
 export default function Home() {
   const searchParams = useSearchParams()
+  const router = useRouter()
   const { status } = useSession()
   const [currentLang, setCurrentLang] = useState<Lang>("en")
   const [currentLesson, setCurrentLesson] = useState<string>("")
@@ -22,6 +24,7 @@ export default function Home() {
   const [isGenerating, setIsGenerating] = useState(false)
   const [showForm, setShowForm] = useState(true)
   const [chatHistory, setChatHistory] = useState<ChatMessage[]>([])
+  const [pendingDiffs, setPendingDiffs] = useState<PendingDiff[]>([])
   const chatHistoryRef = useRef<ChatMessage[]>([])
 
   useEffect(() => {
@@ -29,6 +32,13 @@ export default function Home() {
     // Apply theme if needed (TODO: implement theme switching)
     // Apply other settings as needed
   }, [])
+
+  // Redirect to login if not authenticated
+  useEffect(() => {
+    if (status === "unauthenticated") {
+      router.push("/auth/login")
+    }
+  }, [status, router])
 
   useEffect(() => {
     const lessonId = searchParams.get("lessonId")
@@ -78,6 +88,57 @@ export default function Home() {
     setCurrentLessonId(id)
   }
 
+  const handleDiffsChange = useCallback((diffs: PendingDiff[]) => {
+    setPendingDiffs(diffs)
+  }, [])
+
+  const handleApplyDiff = useCallback(async (diffId: string) => {
+    const diff = pendingDiffs.find(d => d.id === diffId)
+    if (!diff) return
+
+    try {
+      const response = await fetch("/api/apply-change", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ currentLesson, diffs: [diff], lang: currentLang }),
+      })
+      if (response.ok) {
+        const { updatedLesson } = await response.json()
+        setCurrentLesson(updatedLesson)
+        setPendingDiffs(prev => prev.filter(d => d.id !== diffId))
+      }
+    } catch (error) {
+      console.error("Error applying diff:", error)
+    }
+  }, [pendingDiffs, currentLesson, currentLang])
+
+  const handleRejectDiff = useCallback((diffId: string) => {
+    setPendingDiffs(prev => prev.filter(d => d.id !== diffId))
+  }, [])
+
+  const handleApplyAllDiffs = useCallback(async () => {
+    if (pendingDiffs.length === 0) return
+
+    try {
+      const response = await fetch("/api/apply-change", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ currentLesson, diffs: pendingDiffs, lang: currentLang }),
+      })
+      if (response.ok) {
+        const { updatedLesson } = await response.json()
+        setCurrentLesson(updatedLesson)
+        setPendingDiffs([])
+      }
+    } catch (error) {
+      console.error("Error applying all diffs:", error)
+    }
+  }, [pendingDiffs, currentLesson, currentLang])
+
+  const handleRejectAllDiffs = useCallback(() => {
+    setPendingDiffs([])
+  }, [])
+
   const handleMessagesChange = useCallback((messages: ChatMessage[]) => {
     // 过滤掉思考中和流式消息，只保存真正的对话
     const persistentMessages = messages.filter(m => !m.isThinking && !m.isStreaming)
@@ -102,7 +163,7 @@ export default function Home() {
     }
   }, [currentLessonId, chatHistory])
 
-  if (status === "loading") {
+  if (status === "loading" || status === "unauthenticated") {
     return null
   }
 
@@ -136,6 +197,7 @@ export default function Home() {
                   isGenerating={isGenerating}
                   initialMessages={chatHistory}
                   onMessagesChange={handleMessagesChange}
+                  onDiffsChange={handleDiffsChange}
                 />
               </div>
             )}
@@ -143,7 +205,17 @@ export default function Home() {
 
           {/* Right Column - Lesson Preview */}
           <div className="h-[calc(100vh-180px)]">
-            <LessonPreview lang={currentLang} lesson={currentLesson} isGenerating={isGenerating} onLessonUpdate={handleLessonUpdate} />
+            <LessonPreview
+              lang={currentLang}
+              lesson={currentLesson}
+              isGenerating={isGenerating}
+              onLessonUpdate={handleLessonUpdate}
+              pendingDiffs={pendingDiffs}
+              onApplyDiff={handleApplyDiff}
+              onRejectDiff={handleRejectDiff}
+              onApplyAllDiffs={handleApplyAllDiffs}
+              onRejectAllDiffs={handleRejectAllDiffs}
+            />
           </div>
         </div>
       </main>

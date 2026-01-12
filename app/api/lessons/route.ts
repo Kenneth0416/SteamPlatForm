@@ -52,6 +52,18 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 })
     }
 
+    // Ensure user exists (create if not)
+    await prisma.user.upsert({
+      where: { id: userId },
+      update: {},
+      create: {
+        id: userId,
+        email: `${userId}@placeholder.local`,
+        name: 'User',
+        password: '$2a$10$placeholder.hash.that.will.never.match',
+      },
+    })
+
     const lesson = await prisma.lesson.create({
       data: {
         userId,

@@ -13,7 +13,7 @@ const config: Config = {
   },
   testMatch: ['**/__tests__/**/*.test.ts?(x)'],
   transformIgnorePatterns: [
-    '/node_modules/(?!(marked|turndown|docx)/)',
+    '/node_modules/(?!(marked|turndown|docx|unified|remark-parse|remark-stringify|bail|devlop|is-plain-obj|trough|vfile|vfile-message|unist-util-stringify-position|mdast-util-from-markdown|mdast-util-to-markdown|micromark|decode-named-character-reference|character-entities|mdast-util-to-string|mdast-util-phrasing|longest-streak|zwitch)/)',
   ],
   collectCoverageFrom: (() => {
     const argv = process.argv.join(' ')

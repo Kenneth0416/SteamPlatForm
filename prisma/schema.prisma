@@ -31,5 +31,54 @@ model Lesson {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
+  blocks       DocumentBlock[]
+  versions     DocumentVersion[]
+  editHistory  EditHistory[]
+
   @@index([userId])
+}
+
+model DocumentBlock {
+  id        String   @id @default(cuid())
+  lessonId  String
+  type      String   // heading, paragraph, code, list-item
+  content   String   @db.Text
+  order     Int
+  level     Int?     // for headings (1-6) or list nesting
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  lesson    Lesson   @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+
+  @@index([lessonId, order])
+}
+
+model DocumentVersion {
+  id        String   @id @default(cuid())
+  lessonId  String
+  version   Int
+  snapshot  Json     // complete blocks snapshot
+  summary   String?  // change summary
+  createdAt DateTime @default(now())
+
+  lesson    Lesson   @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+
+  @@unique([lessonId, version])
+  @@index([lessonId])
+}
+
+model EditHistory {
+  id         String   @id @default(cuid())
+  lessonId   String
+  blockId    String?
+  action     String   // create, update, delete
+  oldContent String?  @db.Text
+  newContent String?  @db.Text
+  reason     String?  // LLM provided reason
+  source     String   // user, llm
+  createdAt  DateTime @default(now())
+
+  lesson     Lesson   @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+
+  @@index([lessonId, createdAt])
 }

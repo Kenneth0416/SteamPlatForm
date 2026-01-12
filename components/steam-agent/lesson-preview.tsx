@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react"
 import type { Lang } from "@/types/lesson"
+import type { PendingDiff } from "@/lib/editor/types"
 import { getTranslation } from "@/lib/translations"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -13,9 +14,14 @@ interface LessonPreviewProps {
   lesson: string
   isGenerating: boolean
   onLessonUpdate?: (lesson: string) => void
+  pendingDiffs?: PendingDiff[]
+  onApplyDiff?: (diffId: string) => void
+  onRejectDiff?: (diffId: string) => void
+  onApplyAllDiffs?: () => void
+  onRejectAllDiffs?: () => void
 }
 
-export function LessonPreview({ lang, lesson, isGenerating, onLessonUpdate }: LessonPreviewProps) {
+export function LessonPreview({ lang, lesson, isGenerating, onLessonUpdate, pendingDiffs, onApplyDiff, onRejectDiff, onApplyAllDiffs, onRejectAllDiffs }: LessonPreviewProps) {
   const t = getTranslation(lang)
   const [isStreaming, setIsStreaming] = useState(false)
   const [markdown, setMarkdown] = useState("")
@@ -120,6 +126,11 @@ export function LessonPreview({ lang, lesson, isGenerating, onLessonUpdate }: Le
           placeholder={lang === "en" ? "Edit your lesson plan..." : "編輯您的課程計畫..."}
           lang={lang}
           className="h-full"
+          pendingDiffs={pendingDiffs}
+          onApplyDiff={onApplyDiff}
+          onRejectDiff={onRejectDiff}
+          onApplyAllDiffs={onApplyAllDiffs}
+          onRejectAllDiffs={onRejectAllDiffs}
         />
       </CardContent>
     </Card>

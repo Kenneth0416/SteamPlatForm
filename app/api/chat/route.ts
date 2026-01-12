@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server"
-import { chatWithLessonStream } from "@/lib/langchain"
+import { parseMarkdown } from "@/lib/editor/parser"
+import { runEditorAgentStream } from "@/lib/editor/agent"
 
 export async function POST(request: NextRequest) {
   try {
@@ -17,16 +18,44 @@ export async function POST(request: NextRequest) {
       })
     }
 
-    const stream = chatWithLessonStream(message, currentLesson, lang)
+    const { blocks } = parseMarkdown(currentLesson || "")
+    const stream = runEditorAgentStream(message, blocks, [])
 
     const encoder = new TextEncoder()
     const readable = new ReadableStream({
       async start(controller) {
         try {
-          for await (const chunk of stream) {
-            controller.enqueue(encoder.encode(`data: ${JSON.stringify(chunk)}\n\n`))
+          let hasSuggestedChange = false
+
+          for await (const event of stream) {
+            if (event.type === 'new_turn') {
+              controller.enqueue(
+                encoder.encode(`data: ${JSON.stringify({ type: "new_turn" })}\n\n`)
+              )
+            } else if (event.type === 'tool_call') {
+              controller.enqueue(
+                encoder.encode(`data: ${JSON.stringify({ type: "tool_call", toolCall: event.data })}\n\n`)
+              )
+            } else if (event.type === 'content') {
+              controller.enqueue(
+                encoder.encode(`data: ${JSON.stringify({ type: "content", content: event.data })}\n\n`)
+              )
+            } else if (event.type === 'diff') {
+              if (!hasSuggestedChange) {
+                controller.enqueue(
+                  encoder.encode(`data: ${JSON.stringify({ type: "suggested_change", content: "true" })}\n\n`)
+                )
+                hasSuggestedChange = true
+              }
+              controller.enqueue(
+                encoder.encode(`data: ${JSON.stringify({ type: "diff", diff: event.data })}\n\n`)
+              )
+            } else if (event.type === 'done') {
+              controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "done" })}\n\n`))
+              controller.enqueue(encoder.encode("data: [DONE]\n\n"))
+            }
           }
-          controller.enqueue(encoder.encode("data: [DONE]\n\n"))
+
           controller.close()
         } catch (error) {
           controller.error(error)

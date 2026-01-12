@@ -6,10 +6,12 @@ import remarkGfm from "remark-gfm"
 import rehypeRaw from "rehype-raw"
 import { MermaidDiagram } from "@/components/mermaid-diagram"
 import { cn } from "@/lib/utils"
-import { ChevronDown, ChevronRight, Minimize2, Eye, Edit3 } from "lucide-react"
+import { ChevronDown, ChevronRight, Minimize2, Eye, Edit3, Check, X, CheckCheck, XCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { WysiwygEditor } from "@/components/wysiwyg-editor"
 import type { Lang } from "@/types/lesson"
+import type { PendingDiff } from "@/lib/editor/types"
+import { generateWordDiff } from "@/lib/editor/diff"
 
 interface MarkdownEditorProps {
   value: string
@@ -21,6 +23,11 @@ interface MarkdownEditorProps {
   className?: string
   placeholder?: string
   lang?: Lang
+  pendingDiffs?: PendingDiff[]
+  onApplyDiff?: (diffId: string) => void
+  onRejectDiff?: (diffId: string) => void
+  onApplyAllDiffs?: () => void
+  onRejectAllDiffs?: () => void
 }
 
 function CollapsibleSection({ title, children, defaultOpen = true }: { title: string; children: React.ReactNode; defaultOpen?: boolean }) {
@@ -39,7 +46,96 @@ function CollapsibleSection({ title, children, defaultOpen = true }: { title: st
   )
 }
 
-export function MarkdownEditor({ value, onChange, isEditing, isExpanded, onToggleExpand, onToggleEdit, className, placeholder, lang = 'en' }: MarkdownEditorProps) {
+function DiffHighlightPanel({
+  diffs,
+  onApply,
+  onReject,
+  onApplyAll,
+  onRejectAll
+}: {
+  diffs: PendingDiff[]
+  onApply?: (diffId: string) => void
+  onReject?: (diffId: string) => void
+  onApplyAll?: () => void
+  onRejectAll?: () => void
+}) {
+  if (diffs.length === 0) return null
+
+  return (
+    <div className="mb-4 p-3 border rounded-lg bg-muted/30">
+      <div className="flex items-center justify-between mb-2">
+        <div className="text-sm font-medium text-muted-foreground">
+          Pending Changes ({diffs.length})
+        </div>
+        {diffs.length > 1 && (
+          <div className="flex gap-2">
+            <Button size="sm" variant="outline" onClick={onRejectAll}>
+              <XCircle className="h-3 w-3 mr-1" />
+              Reject All
+            </Button>
+            <Button size="sm" onClick={onApplyAll}>
+              <CheckCheck className="h-3 w-3 mr-1" />
+              Apply All
+            </Button>
+          </div>
+        )}
+      </div>
+      <div className="space-y-2">
+        {diffs.map((diff) => (
+          <div key={diff.id} className="text-sm border rounded p-2 bg-background">
+            <div className="flex items-center justify-between mb-1">
+              <div className="text-xs text-muted-foreground">
+                {diff.action === 'update' ? 'Edit' : diff.action === 'add' ? 'Add' : 'Delete'} - {diff.reason}
+              </div>
+              <div className="flex gap-1">
+                <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => onReject?.(diff.id)}>
+                  <X className="h-3 w-3 text-red-500" />
+                </Button>
+                <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => onApply?.(diff.id)}>
+                  <Check className="h-3 w-3 text-green-500" />
+                </Button>
+              </div>
+            </div>
+            {diff.action === 'delete' ? (
+              <div className="bg-red-100 dark:bg-red-900/30 p-1 rounded">
+                <span className="text-red-800 dark:text-red-300 line-through">{diff.oldContent}</span>
+              </div>
+            ) : diff.action === 'add' ? (
+              <div className="bg-green-100 dark:bg-green-900/30 p-1 rounded">
+                <span className="text-green-800 dark:text-green-300">
+                  {(() => {
+                    try {
+                      const parsed = JSON.parse(diff.newContent)
+                      return parsed.content
+                    } catch {
+                      return diff.newContent
+                    }
+                  })()}
+                </span>
+              </div>
+            ) : (
+              <div className="font-mono text-xs whitespace-pre-wrap">
+                {generateWordDiff(diff.oldContent, diff.newContent).map((change, i) => (
+                  <span
+                    key={i}
+                    className={cn(
+                      change.type === 'add' && 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300',
+                      change.type === 'remove' && 'bg-red-100 text-red-800 line-through dark:bg-red-900/30 dark:text-red-300'
+                    )}
+                  >
+                    {change.value}
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+export function MarkdownEditor({ value, onChange, isEditing, isExpanded, onToggleExpand, onToggleEdit, className, placeholder, lang = 'en', pendingDiffs, onApplyDiff, onRejectDiff, onApplyAllDiffs, onRejectAllDiffs }: MarkdownEditorProps) {
   const [sections, setSections] = useState<{ title: string; content: string }[]>([])
   const [header, setHeader] = useState("")
 
@@ -136,6 +232,15 @@ export function MarkdownEditor({ value, onChange, isEditing, isExpanded, onToggl
       ) : (
         <div className="flex-1 overflow-auto">
           <div className="pb-16">
+            {pendingDiffs && pendingDiffs.length > 0 && (
+              <DiffHighlightPanel
+                diffs={pendingDiffs}
+                onApply={onApplyDiff}
+                onReject={onRejectDiff}
+                onApplyAll={onApplyAllDiffs}
+                onRejectAll={onRejectAllDiffs}
+              />
+            )}
             <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]} components={markdownComponents}>
               {header}
             </ReactMarkdown>

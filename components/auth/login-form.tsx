@@ -2,10 +2,11 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { signIn } from 'next-auth/react';
+import { signIn, getSession } from 'next-auth/react';
 import Link from 'next/link';
 import { Lang } from '@/types/lesson';
 import { getTranslation } from '@/lib/translations';
+import { setCurrentUser } from '@/lib/authStorage';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -51,6 +52,17 @@ export function LoginForm({ lang }: LoginFormProps) {
       if (result?.error) {
         setError(t.auth.loginError);
       } else {
+        // Sync user info to localStorage from NextAuth session
+        const session = await getSession();
+        if (session?.user) {
+          setCurrentUser({
+            id: (session.user as any).id,
+            name: session.user.name || '',
+            email: session.user.email || '',
+            role: (session.user as any).role || 'user',
+            createdAt: new Date(),
+          });
+        }
         router.push('/');
         router.refresh();
       }

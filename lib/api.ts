@@ -215,10 +215,10 @@ export async function getAllSavedLessons(
   }
 }
 
-export async function saveLesson(markdown: string, requirements: LessonRequirements, existingId?: string): Promise<SavedLesson | null> {
+export async function saveLesson(markdown: string, requirements: LessonRequirements, existingId?: string): Promise<SavedLesson | null | 'auth_required'> {
   try {
     const currentUser = getCurrentUser()
-    if (!currentUser) throw new Error("User not authenticated")
+    if (!currentUser) return 'auth_required'
 
     // Extract title from markdown
     const titleMatch = markdown.match(/^# (.+)$/m)
