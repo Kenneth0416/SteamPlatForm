@@ -12,11 +12,11 @@ import type {
 import { getTranslation } from "@/lib/translations"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
 import { ChevronLeft, ChevronRight, MessageSquare } from "lucide-react"
 
 interface LessonRequirementsFormProps {
@@ -44,6 +44,7 @@ export function LessonRequirementsForm({
   const [classSize, setClassSize] = useState<string>("")
   const [steamDomains, setSteamDomains] = useState<STEAMDomain[]>(["S", "T", "E"])
   const [lessonTopic, setLessonTopic] = useState<string>("")
+  const [notes, setNotes] = useState<string>("")
   const [schoolThemes, setSchoolThemes] = useState<string[]>([])
   const [teachingApproach, setTeachingApproach] = useState<TeachingApproach>("project")
   const [difficultyLevel, setDifficultyLevel] = useState<DifficultyLevel>("intermediate")
@@ -59,6 +60,7 @@ export function LessonRequirementsForm({
       setClassSize(initialRequirements.classSize?.toString() || "")
       setSteamDomains(initialRequirements.steamDomains)
       setLessonTopic(initialRequirements.lessonTopic)
+      setNotes(initialRequirements.notes || "")
       setSchoolThemes(initialRequirements.schoolThemes)
       setTeachingApproach(initialRequirements.teachingApproach)
       setDifficultyLevel(initialRequirements.difficultyLevel)
@@ -73,10 +75,6 @@ export function LessonRequirementsForm({
     setSchoolThemes((prev) => (prev.includes(theme) ? prev.filter((t) => t !== theme) : [...prev, theme]))
   }
 
-  const handleQuickTopic = (topic: string) => {
-    setLessonTopic(topic)
-  }
-
   const handleGenerate = () => {
     const requirements: LessonRequirements = {
       gradeLevel,
@@ -88,6 +86,7 @@ export function LessonRequirementsForm({
       schoolThemes,
       teachingApproach,
       difficultyLevel,
+      notes: notes || undefined,
     }
     onGenerate(requirements)
   }
@@ -100,6 +99,7 @@ export function LessonRequirementsForm({
     setClassSize("")
     setSteamDomains(["S", "T", "E"])
     setLessonTopic("")
+    setNotes("")
     setSchoolThemes([])
     setTeachingApproach("project")
     setDifficultyLevel("intermediate")
@@ -112,6 +112,7 @@ export function LessonRequirementsForm({
     setClassSize("24")
     setSteamDomains(["S", "T", "E", "M"])
     setLessonTopic("Solar-Powered Car Design")
+    setNotes("Focus on hands-on activities and teamwork")
     setSchoolThemes(["Sustainability", "Innovation"])
     setTeachingApproach("project")
     setDifficultyLevel("intermediate")
@@ -156,8 +157,9 @@ export function LessonRequirementsForm({
               <Input
                 type="number"
                 min="1"
-                value={numberOfSessions}
-                onChange={(e) => setNumberOfSessions(Number.parseInt(e.target.value) || 1)}
+                value={numberOfSessions || ''}
+                onChange={(e) => setNumberOfSessions(e.target.value ? Number.parseInt(e.target.value) : 0)}
+                onBlur={(e) => !e.target.value && setNumberOfSessions(3)}
               />
             </div>
 
@@ -168,8 +170,9 @@ export function LessonRequirementsForm({
                 type="number"
                 min="15"
                 step="15"
-                value={durationPerSession}
-                onChange={(e) => setDurationPerSession(Number.parseInt(e.target.value) || 45)}
+                value={durationPerSession || ''}
+                onChange={(e) => setDurationPerSession(e.target.value ? Number.parseInt(e.target.value) : 0)}
+                onBlur={(e) => !e.target.value && setDurationPerSession(45)}
               />
             </div>
 
@@ -219,21 +222,15 @@ export function LessonRequirementsForm({
               />
             </div>
 
-            {/* Quick Topics */}
+            {/* Notes for AI */}
             <div className="space-y-2">
-              <Label className="text-sm text-muted-foreground">{t.quickTopics}</Label>
-              <div className="flex flex-wrap gap-2">
-                {t.quickTopicsList.map((topic) => (
-                  <Badge
-                    key={topic}
-                    variant="outline"
-                    className="cursor-pointer hover:bg-accent"
-                    onClick={() => handleQuickTopic(topic)}
-                  >
-                    {topic}
-                  </Badge>
-                ))}
-              </div>
+              <Label>{t.notes}</Label>
+              <Textarea
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder={t.notesPlaceholder}
+                className="min-h-[80px] resize-none"
+              />
             </div>
           </div>
         )

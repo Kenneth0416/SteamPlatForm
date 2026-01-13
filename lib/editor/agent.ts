@@ -8,40 +8,30 @@ import type { Block, PendingDiff } from './types'
 
 const SYSTEM_PROMPT = `You are a document editing assistant. You help users modify their documents through natural language commands.
 
-IMPORTANT RULES:
-1. ALWAYS call list_blocks first to see the document structure
-2. ALWAYS read blocks before editing - use read_blocks for multiple blocks, read_block for single
-3. Use BATCH tools (read_blocks, edit_blocks) when modifying multiple blocks - this is more efficient
-4. Be precise - only modify what the user asks for
-5. Explain your changes clearly in the reason field
-6. If unsure which block to edit, ask for clarification
-7. CRITICAL: Before EVERY tool call, briefly explain what you're about to do in plain text. Example: "Let me first check the document structure." then call list_blocks.
-8. NEVER add empty headings or headings without content following them
-9. NEVER add duplicate headings - check existing structure first
-10. When adding new sections, always include meaningful content, not just headings
+EFFICIENCY RULES (CRITICAL):
+1. MINIMIZE tool calls - plan ALL operations upfront, execute in ONE batch
+2. NEVER use read_block/edit_block when multiple blocks are involved - ALWAYS use read_blocks/edit_blocks
+3. After list_blocks, you should know exactly which blocks to read/edit - do it in ONE call
+4. Maximum 3 tool calls per request: list_blocks → read_blocks → edit_blocks
+
+WORKFLOW (follow strictly):
+1. list_blocks - get document structure (REQUIRED first step)
+2. read_blocks - read ALL relevant blocks in ONE call (skip if list_blocks preview is enough)
+3. edit_blocks - make ALL edits in ONE call
+4. Respond with summary
+
+RULES:
+- Be precise - only modify what the user asks for
+- For READ-ONLY queries: list_blocks → read_blocks → answer immediately (NO edits)
+- STOP when you have enough info - don't over-read
+- Never add empty headings or duplicate content
 
 Available tools:
-- list_blocks: See all blocks in the document (call this first)
-- read_block: Read a single block's full content
-- read_blocks: Batch read multiple blocks (PREFERRED for multiple blocks, max 25)
-- edit_block: Modify a single block's content
-- edit_blocks: Batch edit multiple blocks (PREFERRED for multiple edits, max 25)
+- list_blocks: See document structure with previews (call first)
+- read_blocks: Batch read blocks (max 25) - ALWAYS use this over read_block
+- edit_blocks: Batch edit blocks (max 25) - ALWAYS use this over edit_block
 - add_block: Add a new block
-- delete_block: Remove a block
-
-BATCH WORKFLOW (for multiple changes):
-1. Call list_blocks to understand the document
-2. Identify all target block IDs from the list
-3. Call read_blocks with all target IDs (up to 25 at once)
-4. Call edit_blocks with all edits (up to 25 at once)
-5. If more than 25 blocks, repeat in batches
-6. Summarize what changes were proposed
-
-SINGLE BLOCK WORKFLOW:
-1. Call list_blocks to understand the document
-2. Call read_block for the target block
-3. Call edit_block to make the change
-4. Summarize what was proposed`
+- delete_block: Remove a block`
 
 function createLLMClient() {
   const apiKey = process.env.DEEPSEEK_API_KEY
@@ -55,8 +45,8 @@ function createLLMClient() {
     configuration: {
       baseURL: process.env.DEEPSEEK_BASE_URL || 'https://api.deepseek.com/v1',
     },
-    temperature: 0.3,
-    maxTokens: 2048,
+    temperature: 0.2,
+    maxTokens: 8192,
   })
 }
 
@@ -241,15 +231,15 @@ export async function* runEditorAgentStream(
       yield { type: 'new_turn' }
     }
 
+    // Use invoke for reliable tool call handling
     const response = await llmWithTools.invoke(messages)
     messages.push(response)
 
+    const contentStr = typeof response.content === 'string' ? response.content : ''
     const toolCalls = response.tool_calls || []
 
-    // Yield AI content before tool calls (explains what the AI is about to do)
-    const contentStr = typeof response.content === 'string' ? response.content : ''
-    if (contentStr.trim()) {
-      console.log('[EditorAgentStream] Yielding AI content:', contentStr.slice(0, 100))
+    // Yield content for frontend typewriter effect
+    if (contentStr) {
       yield { type: 'content', data: contentStr }
     }
 

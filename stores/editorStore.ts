@@ -56,6 +56,7 @@ interface EditorState {
 
   // Chat
   addChatMessage: (message: ChatMessage) => void
+  updateChatMessage: (id: string, content: string) => void
   clearChat: () => void
 
   // Loading
@@ -239,6 +240,14 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 
   addChatMessage: (message) => {
     set(state => ({ chatMessages: [...state.chatMessages, message] }))
+  },
+
+  updateChatMessage: (id, content) => {
+    set(state => ({
+      chatMessages: state.chatMessages.map(m =>
+        m.id === id ? { ...m, content } : m
+      ),
+    }))
   },
 
   clearChat: () => set({ chatMessages: [] }),

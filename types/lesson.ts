@@ -18,6 +18,7 @@ export interface LessonRequirements {
   schoolThemes: string[]
   teachingApproach: TeachingApproach
   difficultyLevel: DifficultyLevel
+  notes?: string // 用户备注，传给大模型参考
 }
 
 export interface LessonOverview {

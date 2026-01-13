@@ -35,6 +35,7 @@ export async function generateLesson(requirements: LessonRequirements, lang: "en
     teachingApproach: requirements.teachingApproach,
     difficultyLevel: requirements.difficultyLevel,
     schoolThemes: requirements.schoolThemes.join(", "),
+    notes: requirements.notes ? `\nAdditional Notes: ${requirements.notes}` : "",
   }, {
     runName: "generate-lesson",
     metadata: { lang, topic: requirements.lessonTopic },
@@ -58,6 +59,7 @@ export async function* generateLessonStream(requirements: LessonRequirements, la
     teachingApproach: requirements.teachingApproach,
     difficultyLevel: requirements.difficultyLevel,
     schoolThemes: requirements.schoolThemes.join(", "),
+    notes: requirements.notes ? `\nAdditional Notes: ${requirements.notes}` : "",
   }, {
     runName: "generate-lesson-stream",
     metadata: { lang, topic: requirements.lessonTopic },

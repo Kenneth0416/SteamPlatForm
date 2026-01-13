@@ -145,7 +145,7 @@ STEAM Domains: {steamDomains}
 Teaching Approach: {teachingApproach}
 Difficulty Level: {difficultyLevel}
 School Themes: {schoolThemes}
-
+{notes}
 Please respond in English using Markdown format.`
 
 const HUMAN_PROMPT_ZH = `請設計一份 STEAM 課程教案：
@@ -159,7 +159,7 @@ STEAM 領域：{steamDomains}
 教學方法：{teachingApproach}
 難度等級：{difficultyLevel}
 學校主題：{schoolThemes}
-
+{notes}
 請用繁體中文回答，使用 Markdown 格式。`
 
 export function getLessonPrompt(lang: "en" | "zh") {

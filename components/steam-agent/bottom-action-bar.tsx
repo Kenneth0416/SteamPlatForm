@@ -1,16 +1,9 @@
 "use client"
 
 import type { Lang, LessonRequirements } from "@/types/lesson"
-import type { PdfTemplate, WordTemplate } from "@/types/settings"
 import { getTranslation } from "@/lib/translations"
 import { Button } from "@/components/ui/button"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
-import { Save, FileDown, Copy, Library, Loader2, ChevronDown } from "lucide-react"
+import { Save, FileDown, Copy, Library, Loader2 } from "lucide-react"
 import { exportLessonPdf, exportLessonWord, saveLesson } from "@/lib/api"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
@@ -60,13 +53,13 @@ export function BottomActionBar({
     return `${normalized}.${ext}`
   }
 
-  const runPdfExport = (template: PdfTemplate) => {
+  const runPdfExport = () => {
     if (!hasLessonContent || isExportingPdf || isExportingWord) return
 
     setIsExportingPdf(true)
     const settings = loadSettings()
 
-    exportLessonPdf(currentLesson, template, settings.includeImages)
+    exportLessonPdf(currentLesson, "detailed", settings.includeImages)
       .then((blob) => {
         downloadBlob(blob, makeExportFilename(currentLesson, "pdf"))
       })
@@ -85,13 +78,13 @@ export function BottomActionBar({
       })
   }
 
-  const runWordExport = (template: WordTemplate) => {
+  const runWordExport = () => {
     if (!hasLessonContent || isExportingPdf || isExportingWord) return
 
     setIsExportingWord(true)
     const settings = loadSettings()
 
-    exportLessonWord(currentLesson, template, settings.includeImages)
+    exportLessonWord(currentLesson, "detailed", settings.includeImages)
       .then((blob) => {
         downloadBlob(blob, makeExportFilename(currentLesson, "docx"))
       })
@@ -135,16 +128,6 @@ export function BottomActionBar({
     })
   }
 
-  const handleExportPdf = () => {
-    const settings = loadSettings()
-    runPdfExport(settings.exportPdfTemplate)
-  }
-
-  const handleExportWord = () => {
-    const settings = loadSettings()
-    runWordExport(settings.exportWordTemplate)
-  }
-
   const handleDuplicate = () => {
     // TODO: implement lesson duplication
     console.log("[v0] Duplicate lesson:", currentLesson)
@@ -170,85 +153,32 @@ export function BottomActionBar({
               <Save className="h-4 w-4 mr-2" />
               {t.save}
             </Button>
-            <DropdownMenu>
-              <div className="inline-flex">
-                <Button
-                  onClick={handleExportPdf}
-                  disabled={!hasLessonContent || isExportingPdf || isExportingWord}
-                  variant="outline"
-                  size="sm"
-                  className="rounded-r-none"
-                >
-                  {isExportingPdf ? (
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  ) : (
-                    <FileDown className="h-4 w-4 mr-2" />
-                  )}
-                  {t.exportPdf}
-                </Button>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    disabled={!hasLessonContent || isExportingPdf || isExportingWord}
-                    variant="outline"
-                    size="sm"
-                    className="rounded-l-none border-l-0 px-2"
-                    aria-label={lang === "en" ? "PDF template options" : "PDF 模板選項"}
-                  >
-                    <ChevronDown className="h-4 w-4" />
-                  </Button>
-                </DropdownMenuTrigger>
-              </div>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem onSelect={() => runPdfExport("standard")}>
-                  {t.settings.templateStandard}
-                </DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => runPdfExport("detailed")}>
-                  {t.settings.templateDetailed}
-                </DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => runPdfExport("minimal")}>
-                  {t.settings.templateMinimal}
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-
-            <DropdownMenu>
-              <div className="inline-flex">
-                <Button
-                  onClick={handleExportWord}
-                  disabled={!hasLessonContent || isExportingPdf || isExportingWord}
-                  variant="outline"
-                  size="sm"
-                  className="rounded-r-none"
-                >
-                  {isExportingWord ? (
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  ) : (
-                    <FileDown className="h-4 w-4 mr-2" />
-                  )}
-                  {t.exportWord}
-                </Button>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    disabled={!hasLessonContent || isExportingPdf || isExportingWord}
-                    variant="outline"
-                    size="sm"
-                    className="rounded-l-none border-l-0 px-2"
-                    aria-label={lang === "en" ? "Word template options" : "Word 模板選項"}
-                  >
-                    <ChevronDown className="h-4 w-4" />
-                  </Button>
-                </DropdownMenuTrigger>
-              </div>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem onSelect={() => runWordExport("standard")}>
-                  {t.settings.templateStandard}
-                </DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => runWordExport("detailed")}>
-                  {t.settings.templateDetailed}
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-
+            <Button
+              onClick={runPdfExport}
+              disabled={!hasLessonContent || isExportingPdf || isExportingWord}
+              variant="outline"
+              size="sm"
+            >
+              {isExportingPdf ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <FileDown className="h-4 w-4 mr-2" />
+              )}
+              {t.exportPdf}
+            </Button>
+            <Button
+              onClick={runWordExport}
+              disabled={!hasLessonContent || isExportingPdf || isExportingWord}
+              variant="outline"
+              size="sm"
+            >
+              {isExportingWord ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <FileDown className="h-4 w-4 mr-2" />
+              )}
+              {t.exportWord}
+            </Button>
             <Button onClick={handleDuplicate} disabled={!currentLesson} variant="outline" size="sm">
               <Copy className="h-4 w-4 mr-2" />
               {t.duplicate}

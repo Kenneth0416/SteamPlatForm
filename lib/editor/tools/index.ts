@@ -36,7 +36,7 @@ export function createListBlocksTool(ctx: ToolContext) {
 export function createReadBlockTool(ctx: ToolContext) {
   return new DynamicStructuredTool({
     name: 'read_block',
-    description: 'Read the full content of a specific block. MUST call this before editing a block. Prefer read_blocks for multiple blocks.',
+    description: 'Read ONE block. Use read_blocks instead for 2+ blocks.',
     schema: z.object({
       blockId: z.string().describe('The ID of the block to read'),
     }),
@@ -74,10 +74,10 @@ export function createReadBlockTool(ctx: ToolContext) {
 export function createReadBlocksTool(ctx: ToolContext) {
   return new DynamicStructuredTool({
     name: 'read_blocks',
-    description: 'Batch read multiple blocks. Prefer this over read_block when reading multiple blocks. Marks all blocks as read.',
+    description: 'PREFERRED: Batch read multiple blocks in ONE call. Always use this over read_block.',
     schema: z.object({
       blockIds: z.array(z.string()).min(1).describe('Array of block IDs to read'),
-      withContext: z.boolean().optional().default(true).describe('Include context blocks'),
+      withContext: z.boolean().optional().default(false).describe('Include surrounding context'),
     }),
     func: async ({ blockIds, withContext }) => {
       const ids = blockIds.slice(0, MAX_BATCH_SIZE)
@@ -120,11 +120,11 @@ export function createReadBlocksTool(ctx: ToolContext) {
 export function createEditBlockTool(ctx: ToolContext) {
   return new DynamicStructuredTool({
     name: 'edit_block',
-    description: 'Edit a block\'s content. MUST call read_block first. Creates a pending diff for user confirmation. Prefer edit_blocks for multiple edits.',
+    description: 'Edit ONE block. Use edit_blocks instead for 2+ edits.',
     schema: z.object({
       blockId: z.string().describe('The ID of the block to edit'),
       newContent: z.string().describe('The new content for the block'),
-      reason: z.string().describe('Explanation of why this change is being made'),
+      reason: z.string().describe('Brief reason for this change'),
     }),
     func: async ({ blockId, newContent, reason }) => {
       const check = ctx.guard.canEdit(blockId)
@@ -158,13 +158,13 @@ export function createEditBlockTool(ctx: ToolContext) {
 export function createEditBlocksTool(ctx: ToolContext) {
   return new DynamicStructuredTool({
     name: 'edit_blocks',
-    description: 'Batch edit multiple blocks. MUST call read_blocks/read_block first. Creates pending diffs for user confirmation.',
+    description: 'PREFERRED: Batch edit multiple blocks in ONE call. Always use this over edit_block.',
     schema: z.object({
       edits: z.array(z.object({
-        blockId: z.string().describe('The ID of the block to edit'),
-        newContent: z.string().describe('The new content for the block'),
-        reason: z.string().describe('Explanation of why this change is being made'),
-      })).min(1).describe('Array of edits to apply'),
+        blockId: z.string().describe('Block ID'),
+        newContent: z.string().describe('New content'),
+        reason: z.string().describe('Brief reason'),
+      })).min(1).describe('Array of edits'),
     }),
     func: async ({ edits }) => {
       const batch = edits.slice(0, MAX_BATCH_SIZE)
