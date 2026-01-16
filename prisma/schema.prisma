@@ -1,0 +1,100 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String
+  password  String
+  role      String   @default("user")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  lessons   Lesson[]
+}
+
+model Lesson {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title        String
+  lessonPlan   Json
+  requirements Json
+  chatHistory  Json     @default("[]")
+  tags         String[] @default([])
+  isFavorite   Boolean  @default(false)
+  isArchived   Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  blocks          DocumentBlock[]
+  versions        DocumentVersion[]
+  editHistory     EditHistory[]
+  editorDocuments EditorDocument[]
+
+  @@index([userId])
+}
+
+model DocumentBlock {
+  id        String   @id @default(cuid())
+  lessonId  String
+  type      String   // heading, paragraph, code, list-item
+  content   String   @db.Text
+  order     Int
+  level     Int?     // for headings (1-6) or list nesting
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  lesson    Lesson   @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+
+  @@index([lessonId, order])
+}
+
+model DocumentVersion {
+  id        String   @id @default(cuid())
+  lessonId  String
+  version   Int
+  snapshot  Json     // complete blocks snapshot
+  summary   String?  // change summary
+  createdAt DateTime @default(now())
+
+  lesson    Lesson   @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+
+  @@unique([lessonId, version])
+  @@index([lessonId])
+}
+
+model EditHistory {
+  id         String   @id @default(cuid())
+  lessonId   String
+  blockId    String?
+  action     String   // create, update, delete
+  oldContent String?  @db.Text
+  newContent String?  @db.Text
+  reason     String?  // LLM provided reason
+  source     String   // user, llm
+  createdAt  DateTime @default(now())
+
+  lesson     Lesson   @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+
+  @@index([lessonId, createdAt])
+}
+
+model EditorDocument {
+  id        String   @id @default(cuid())
+  lessonId  String
+  name      String
+  type      String   // lesson, guide, worksheet, custom
+  content   String   @db.Text
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  lesson    Lesson   @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+
+  @@index([lessonId, order])
+}
