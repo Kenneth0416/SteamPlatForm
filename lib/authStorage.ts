@@ -2,6 +2,9 @@ import type { User, StoredUser } from "@/types/auth"
 
 const SESSION_KEY = "steam_session"
 
+/**
+ * @deprecated Use NextAuth signIn() instead. This function will be removed in a future version.
+ */
 export async function register(name: string, email: string, password: string): Promise<{ success: boolean; error?: string }> {
   try {
     const res = await fetch("/api/auth/register", {
@@ -31,6 +34,9 @@ export async function register(name: string, email: string, password: string): P
   }
 }
 
+/**
+ * @deprecated Use NextAuth signIn() instead. This function will be removed in a future version.
+ */
 export async function login(email: string, password: string): Promise<{ success: boolean; error?: string }> {
   try {
     const res = await fetch("/api/auth/login", {
@@ -60,6 +66,9 @@ export async function login(email: string, password: string): Promise<{ success:
   }
 }
 
+/**
+ * @deprecated Use NextAuth signOut() instead. This function will be removed in a future version.
+ */
 export function logout(): void {
   if (typeof window === "undefined") return
 
@@ -70,6 +79,9 @@ export function logout(): void {
   }
 }
 
+/**
+ * @deprecated Use NextAuth useSession() hook instead. This function will be removed in a future version.
+ */
 export function getCurrentUser(): User | null {
   if (typeof window === "undefined") return null
 
@@ -82,6 +94,9 @@ export function getCurrentUser(): User | null {
   }
 }
 
+/**
+ * @deprecated Do not use. NextAuth manages session automatically. This function will be removed in a future version.
+ */
 export function setCurrentUser(user: User): void {
   if (typeof window === "undefined") return
 
@@ -92,6 +107,9 @@ export function setCurrentUser(user: User): void {
   }
 }
 
+/**
+ * @deprecated Use NextAuth useSession() hook instead. This function will be removed in a future version.
+ */
 export function isAuthenticated(): boolean {
   return getCurrentUser() !== null
 }

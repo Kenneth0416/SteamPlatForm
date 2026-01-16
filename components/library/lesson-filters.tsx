@@ -12,12 +12,13 @@ interface LessonFiltersProps {
   lang: Lang;
   selectedGrades: GradeLevel[];
   selectedDomains: STEAMDomain[];
-  showArchived: boolean;
   showFavoritesOnly: boolean;
+  selectedTags: string[];
+  availableTags: string[];
   onGradeChange: (grade: GradeLevel, checked: boolean) => void;
   onDomainChange: (domain: STEAMDomain, checked: boolean) => void;
-  onShowArchivedChange: (checked: boolean) => void;
   onShowFavoritesChange: (checked: boolean) => void;
+  onTagChange: (tag: string, checked: boolean) => void;
   onClearFilters: () => void;
 }
 
@@ -25,12 +26,13 @@ export function LessonFilters({
   lang,
   selectedGrades,
   selectedDomains,
-  showArchived,
   showFavoritesOnly,
+  selectedTags,
+  availableTags,
   onGradeChange,
   onDomainChange,
-  onShowArchivedChange,
   onShowFavoritesChange,
+  onTagChange,
   onClearFilters,
 }: LessonFiltersProps) {
   const t = getTranslation(lang);
@@ -39,7 +41,7 @@ export function LessonFilters({
   const domains: STEAMDomain[] = ['S', 'T', 'E', 'A', 'M'];
 
   const hasActiveFilters =
-    selectedGrades.length > 0 || selectedDomains.length > 0 || showArchived || showFavoritesOnly;
+    selectedGrades.length > 0 || selectedDomains.length > 0 || showFavoritesOnly || selectedTags.length > 0;
 
   return (
     <Card>
@@ -95,28 +97,39 @@ export function LessonFilters({
           </div>
         </div>
 
+        {availableTags.length > 0 && (
+          <div>
+            <Label className="text-sm font-semibold mb-3 block">{t.library.filterByTag}</Label>
+            <div className="space-y-2 max-h-32 overflow-y-auto">
+              {availableTags.map((tag) => (
+                <div key={tag} className="flex items-center space-x-2">
+                  <Checkbox
+                    id={`tag-${tag}`}
+                    checked={selectedTags.includes(tag)}
+                    onCheckedChange={(checked) => onTagChange(tag, checked as boolean)}
+                  />
+                  <Label
+                    htmlFor={`tag-${tag}`}
+                    className="text-sm font-normal cursor-pointer"
+                  >
+                    {tag}
+                  </Label>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         <div className="border-t pt-4">
-          <div className="space-y-2">
-            <div className="flex items-center space-x-2">
-              <Checkbox
-                id="show-favorites"
-                checked={showFavoritesOnly}
-                onCheckedChange={(checked) => onShowFavoritesChange(checked as boolean)}
-              />
-              <Label htmlFor="show-favorites" className="text-sm font-normal cursor-pointer">
-                {t.library.showFavorites}
-              </Label>
-            </div>
-            <div className="flex items-center space-x-2">
-              <Checkbox
-                id="show-archived"
-                checked={showArchived}
-                onCheckedChange={(checked) => onShowArchivedChange(checked as boolean)}
-              />
-              <Label htmlFor="show-archived" className="text-sm font-normal cursor-pointer">
-                {t.library.showArchived}
-              </Label>
-            </div>
+          <div className="flex items-center space-x-2">
+            <Checkbox
+              id="show-favorites"
+              checked={showFavoritesOnly}
+              onCheckedChange={(checked) => onShowFavoritesChange(checked as boolean)}
+            />
+            <Label htmlFor="show-favorites" className="text-sm font-normal cursor-pointer">
+              {t.library.showFavorites}
+            </Label>
           </div>
         </div>
       </CardContent>

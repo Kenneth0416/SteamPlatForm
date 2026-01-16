@@ -1,20 +1,13 @@
 import { NextRequest } from 'next/server'
-import { runEditorAgentStream } from '@/lib/editor/agent'
-import type { Block } from '@/lib/editor/types'
+import { runEditorAgentStream, runMultiDocAgentStream } from '@/lib/editor/agent'
+import type { Block, EditorDocument } from '@/lib/editor/types'
 
 export async function POST(request: NextRequest) {
   try {
-    const { message, blocks, chatHistory } = await request.json()
+    const { message, blocks, chatHistory, documents, activeDocId } = await request.json()
 
     if (!message || typeof message !== 'string') {
       return new Response(JSON.stringify({ error: 'message field is required' }), {
-        status: 400,
-        headers: { 'Content-Type': 'application/json' },
-      })
-    }
-
-    if (!blocks || !Array.isArray(blocks)) {
-      return new Response(JSON.stringify({ error: 'blocks field is required' }), {
         status: 400,
         headers: { 'Content-Type': 'application/json' },
       })
@@ -24,11 +17,21 @@ export async function POST(request: NextRequest) {
     const stream = new ReadableStream({
       async start(controller) {
         try {
-          for await (const event of runEditorAgentStream(
-            message,
-            blocks as Block[],
-            chatHistory || []
-          )) {
+          // Use multi-doc agent if documents provided, otherwise single-doc
+          const agentStream = documents && Array.isArray(documents) && documents.length > 0
+            ? runMultiDocAgentStream(
+                message,
+                documents as EditorDocument[],
+                activeDocId || documents[0].id,
+                chatHistory || []
+              )
+            : runEditorAgentStream(
+                message,
+                blocks as Block[],
+                chatHistory || []
+              )
+
+          for await (const event of agentStream) {
             const data = `data: ${JSON.stringify(event)}\n\n`
             controller.enqueue(encoder.encode(data))
           }

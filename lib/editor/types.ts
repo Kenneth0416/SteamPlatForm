@@ -24,6 +24,20 @@ export interface PendingDiff {
   oldContent: string
   newContent: string
   reason: string
+  docId?: string // for multi-document support
+}
+
+// Multi-document types
+export type DocumentType = 'lesson' | 'guide' | 'worksheet' | 'custom'
+
+export interface EditorDocument {
+  id: string
+  name: string
+  type: DocumentType
+  content: string
+  blocks: Block[]
+  isDirty: boolean
+  createdAt: Date
 }
 
 export interface DiffChange {

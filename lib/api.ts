@@ -180,10 +180,9 @@ export async function getAllSavedLessons(
     userId?: string
     gradeLevels?: string[]
     domains?: string[]
-    dateFrom?: string
-    dateTo?: string
-    showArchived?: boolean
     showFavoriteOnly?: boolean
+    showArchived?: boolean
+    tags?: string[]
   },
   sortBy: SortBy = "updatedAt",
   sortOrder: SortOrder = "desc",
@@ -197,12 +196,11 @@ export async function getAllSavedLessons(
     if (searchQuery) params.append("search", searchQuery)
     if (sortBy) params.append("sortBy", sortBy)
     if (sortOrder) params.append("sortOrder", sortOrder)
-    if (filters?.showArchived) params.append("showArchived", "true")
     if (filters?.showFavoriteOnly) params.append("showFavoriteOnly", "true")
+    if (filters?.showArchived) params.append("showArchived", "true")
     if (filters?.gradeLevels?.length) params.append("gradeLevels", filters.gradeLevels.join(","))
     if (filters?.domains?.length) params.append("domains", filters.domains.join(","))
-    if (filters?.dateFrom) params.append("dateFrom", filters.dateFrom)
-    if (filters?.dateTo) params.append("dateTo", filters.dateTo)
+    if (filters?.tags?.length) params.append("tags", filters.tags.join(","))
 
     const res = await fetch(`/api/lessons?${params.toString()}`)
     if (!res.ok) throw new Error("Failed to fetch lessons")
@@ -303,8 +301,8 @@ export async function toggleFavorite(id: string): Promise<SavedLesson | null> {
   }
 }
 
-export async function archiveLesson(id: string): Promise<SavedLesson | null> {
-  return updateLesson(id, { isArchived: true })
+export async function archiveLesson(id: string, archived = true): Promise<SavedLesson | null> {
+  return updateLesson(id, { isArchived: archived })
 }
 
 export async function duplicateLesson(id: string): Promise<SavedLesson | null> {

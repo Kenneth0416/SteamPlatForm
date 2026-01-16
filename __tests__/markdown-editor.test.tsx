@@ -143,29 +143,38 @@ describe("MarkdownEditor", () => {
       />,
     )
 
-    expect(screen.getByText(/Lesson Plan/)).toBeInTheDocument()
-    expect(screen.getByText("Section One")).toBeInTheDocument()
-    expect(screen.getByText("Section Two")).toBeInTheDocument()
-    expect(screen.getByText("Section Three")).toBeInTheDocument()
-    expect(screen.getByText("Section Four")).toBeInTheDocument()
+    expect(await screen.findByText(/Lesson Plan/)).toBeInTheDocument()
+    expect(await screen.findByText("Section One")).toBeInTheDocument()
+    expect(await screen.findByText("Section Two")).toBeInTheDocument()
+    expect(await screen.findByText("Section Three")).toBeInTheDocument()
+    expect(await screen.findByText("Section Four")).toBeInTheDocument()
 
-    expect(screen.getByText("Details for the first section.")).toBeInTheDocument()
-    expect(screen.getByText("Follow-up details.")).toBeInTheDocument()
-    expect(screen.getByText("Third body.")).toBeInTheDocument()
+    const sectionOneToggle = screen.getByRole("button", { name: /Section One/ })
+    const sectionTwoToggle = screen.getByRole("button", { name: /Section Two/ })
+    const sectionThreeToggle = screen.getByRole("button", { name: /Section Three/ })
+    const sectionFourToggle = screen.getByRole("button", { name: /Section Four/ })
+
+    await user.click(sectionOneToggle)
+    expect(await screen.findByText("Details for the first section.")).toBeInTheDocument()
+
+    await user.click(sectionTwoToggle)
+    expect(await screen.findByText("Follow-up details.")).toBeInTheDocument()
+
+    await user.click(sectionThreeToggle)
+    expect(await screen.findByText("Third body.")).toBeInTheDocument()
+
     expect(screen.queryByText("Hidden until expanded.")).not.toBeInTheDocument()
 
     const mermaid = screen.getByTestId("mermaid-diagram")
     expect(mermaid).toHaveTextContent(/flowchart TD\s*A-->B/)
     expect(mermaidMock).toHaveBeenCalledWith(expect.objectContaining({ chart: "flowchart TD\nA-->B" }))
 
-    const toggle = screen.getByRole("button", { name: /Section One/ })
-    await user.click(toggle)
+    await user.click(sectionOneToggle)
     expect(screen.queryByText("Details for the first section.")).not.toBeInTheDocument()
-    await user.click(toggle)
-    expect(screen.getByText("Details for the first section.")).toBeInTheDocument()
+    await user.click(sectionOneToggle)
+    expect(await screen.findByText("Details for the first section.")).toBeInTheDocument()
 
-    const fourthToggle = screen.getByRole("button", { name: /Section Four/ })
-    await user.click(fourthToggle)
+    await user.click(sectionFourToggle)
     expect(screen.getByText("Hidden until expanded.")).toBeInTheDocument()
   })
 

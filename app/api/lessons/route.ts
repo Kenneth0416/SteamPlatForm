@@ -7,15 +7,18 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url)
     const userId = searchParams.get("userId")
     const search = searchParams.get("search")
-    const showArchived = searchParams.get("showArchived") === "true"
     const showFavoriteOnly = searchParams.get("showFavoriteOnly") === "true"
+    const showArchived = searchParams.get("showArchived") === "true"
     const sortBy = searchParams.get("sortBy") || "updatedAt"
     const sortOrder = searchParams.get("sortOrder") || "desc"
+    const gradeLevels = searchParams.get("gradeLevels")
+    const domains = searchParams.get("domains")
+    const tags = searchParams.get("tags")
 
     const lessons = await prisma.lesson.findMany({
       where: {
         ...(userId && { userId }),
-        isArchived: showArchived ? undefined : false,
+        isArchived: showArchived,
         isFavorite: showFavoriteOnly ? true : undefined,
         ...(search && {
           OR: [
@@ -23,14 +26,31 @@ export async function GET(request: NextRequest) {
             { tags: { has: search } },
           ],
         }),
+        ...(tags && { tags: { hasSome: tags.split(",") } }),
       },
       orderBy: {
         [sortBy]: sortOrder,
       },
     })
 
+    // Filter by gradeLevels and domains in application layer (Prisma Json query is limited)
+    const gradeLevelList = gradeLevels?.split(",") || []
+    const domainList = domains?.split(",") || []
+
+    const filteredLessons = lessons.filter(lesson => {
+      const req = lesson.requirements as { gradeLevel?: string; steamDomains?: string[] }
+
+      if (gradeLevelList.length > 0 && !gradeLevelList.includes(req.gradeLevel || "")) {
+        return false
+      }
+      if (domainList.length > 0 && !domainList.some(d => req.steamDomains?.includes(d))) {
+        return false
+      }
+      return true
+    })
+
     // Transform lessons to include markdown at top level
-    const transformedLessons = lessons.map(lesson => ({
+    const transformedLessons = filteredLessons.map(lesson => ({
       ...lesson,
       markdown: (lesson.lessonPlan as { markdown?: string })?.markdown || "",
     }))

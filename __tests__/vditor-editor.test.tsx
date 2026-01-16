@@ -167,16 +167,25 @@ describe('VditorEditor', () => {
     expect(vditorMock.mockSetValue).toHaveBeenCalledTimes(1)
   })
 
-  it('skips setValue when the incoming value already matches the editor content', async () => {
+  it('skips setValue when the incoming value matches the last emitted content', async () => {
     const onChange = jest.fn()
     const { rerender } = render(<VditorEditorInner value="Alpha" onChange={onChange} />)
 
     await waitFor(() => expect(Vditor as unknown as jest.Mock).toHaveBeenCalled())
-    vditorMock.mockGetValue.mockReturnValue('Beta')
+    const options = vditorMock.getLastOptions()
+
+    jest.useFakeTimers()
+    try {
+      act(() => {
+        options.input?.('Beta')
+        jest.runOnlyPendingTimers()
+      })
+    } finally {
+      jest.useRealTimers()
+    }
 
     rerender(<VditorEditorInner value="Beta" onChange={onChange} />)
 
-    await waitFor(() => expect(vditorMock.mockGetValue).toHaveBeenCalled())
     expect(vditorMock.mockSetValue).not.toHaveBeenCalled()
   })
 

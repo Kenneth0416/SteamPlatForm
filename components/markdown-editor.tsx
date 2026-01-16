@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState, useMemo } from "react"
+import { useEffect, useState, useMemo, useRef } from "react"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import rehypeRaw from "rehype-raw"
@@ -135,36 +135,124 @@ function DiffHighlightPanel({
   )
 }
 
+interface H1Group {
+  title: string
+  headerContent: string
+  sections: { title: string; content: string }[]
+}
+
 export function MarkdownEditor({ value, onChange, isEditing, isExpanded, onToggleExpand, onToggleEdit, className, placeholder, lang = 'en', pendingDiffs, onApplyDiff, onRejectDiff, onApplyAllDiffs, onRejectAllDiffs }: MarkdownEditorProps) {
   const [sections, setSections] = useState<{ title: string; content: string }[]>([])
   const [header, setHeader] = useState("")
+  const [h1Groups, setH1Groups] = useState<H1Group[]>([])
+  const parseTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
-  // Parse markdown into sections
+  // Parse markdown into sections with H1 support (skip in edit mode, debounce for streaming)
   useEffect(() => {
-    const lines = value.split("\n")
-    const parsed: { title: string; content: string }[] = []
-    let headerLines: string[] = []
-    let currentSection: { title: string; content: string[] } | null = null
+    if (isEditing) return
+    if (!value || !value.trim()) {
+      setHeader("")
+      setSections([])
+      setH1Groups([])
+      return
+    }
+
+    // Debounce parsing to avoid excessive updates during streaming
+    if (parseTimeoutRef.current) {
+      clearTimeout(parseTimeoutRef.current)
+    }
+    parseTimeoutRef.current = setTimeout(() => {
+      const lines = value.split("\n")
+    const groups: H1Group[] = []
+    let globalHeader: string[] = []
+    let currentH1: H1Group | null = null
+    let currentH2: { title: string; content: string[] } | null = null
+    let h1HeaderLines: string[] = []
 
     for (const line of lines) {
-      if (line.startsWith("## ")) {
-        if (currentSection) {
-          parsed.push({ title: currentSection.title, content: currentSection.content.join("\n") })
-        } else {
-          setHeader(headerLines.join("\n"))
+      // Check for H1 (but not H2)
+      if (line.startsWith("# ") && !line.startsWith("## ")) {
+        // Save previous H2 if exists
+        if (currentH2 && currentH1) {
+          currentH1.sections.push({ title: currentH2.title, content: currentH2.content.join("\n") })
+          currentH2 = null
         }
-        currentSection = { title: line.slice(3), content: [] }
-      } else if (currentSection) {
-        currentSection.content.push(line)
+        // Save previous H1 if exists
+        if (currentH1) {
+          currentH1.headerContent = h1HeaderLines.join("\n")
+          groups.push(currentH1)
+        }
+        currentH1 = { title: line.slice(2), headerContent: "", sections: [] }
+        h1HeaderLines = []
+      } else if (line.startsWith("## ")) {
+        // Save previous H2 if exists
+        if (currentH2 && currentH1) {
+          currentH1.sections.push({ title: currentH2.title, content: currentH2.content.join("\n") })
+        } else if (currentH1) {
+          currentH1.headerContent = h1HeaderLines.join("\n")
+          h1HeaderLines = []
+        }
+        currentH2 = { title: line.slice(3), content: [] }
+      } else if (currentH2) {
+        currentH2.content.push(line)
+      } else if (currentH1) {
+        h1HeaderLines.push(line)
       } else {
-        headerLines.push(line)
+        globalHeader.push(line)
       }
     }
-    if (currentSection) {
-      parsed.push({ title: currentSection.title, content: currentSection.content.join("\n") })
+
+    // Finalize last H2 and H1
+    if (currentH2 && currentH1) {
+      currentH1.sections.push({ title: currentH2.title, content: currentH2.content.join("\n") })
+    } else if (currentH1 && h1HeaderLines.length > 0) {
+      currentH1.headerContent = h1HeaderLines.join("\n")
     }
-    setSections(parsed)
-  }, [value])
+    if (currentH1) {
+      groups.push(currentH1)
+    }
+
+    // If we have H1 groups, use the new structure
+    if (groups.length > 0) {
+      setHeader(globalHeader.join("\n"))
+      setH1Groups(groups)
+      setSections([])
+    } else {
+      // Fallback to old H2-only parsing for backward compatibility
+      const parsed: { title: string; content: string }[] = []
+      let headerLines: string[] = []
+      let currentSection: { title: string; content: string[] } | null = null
+
+      for (const line of lines) {
+        if (line.startsWith("## ")) {
+          if (currentSection) {
+            parsed.push({ title: currentSection.title, content: currentSection.content.join("\n") })
+          } else {
+            setHeader(headerLines.join("\n"))
+          }
+          currentSection = { title: line.slice(3), content: [] }
+        } else if (currentSection) {
+          currentSection.content.push(line)
+        } else {
+          headerLines.push(line)
+        }
+      }
+      if (currentSection) {
+        parsed.push({ title: currentSection.title, content: currentSection.content.join("\n") })
+      } else {
+        setHeader(headerLines.join("\n"))
+      }
+      setSections(parsed)
+      setH1Groups([])
+    }
+    }, 100) // 100ms debounce
+
+    return () => {
+      if (parseTimeoutRef.current) {
+        clearTimeout(parseTimeoutRef.current)
+      }
+    }
+  }, [value, isEditing])
 
   const markdownComponents = useMemo(() => ({
     h1: ({ children }: { children?: React.ReactNode }) => <h1 className="text-2xl font-bold mb-4">{children}</h1>,
@@ -244,13 +332,32 @@ export function MarkdownEditor({ value, onChange, isEditing, isExpanded, onToggl
             <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]} components={markdownComponents}>
               {header}
             </ReactMarkdown>
-            {sections.map((section, i) => (
-              <CollapsibleSection key={i} title={section.title} defaultOpen={i < 3}>
-                <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]} components={markdownComponents}>
-                  {section.content}
-                </ReactMarkdown>
-              </CollapsibleSection>
-            ))}
+            {h1Groups.length > 0 ? (
+              h1Groups.map((group, gi) => (
+                <CollapsibleSection key={`h1-${gi}`} title={group.title} defaultOpen={gi < 2}>
+                  {group.headerContent && (
+                    <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]} components={markdownComponents}>
+                      {group.headerContent}
+                    </ReactMarkdown>
+                  )}
+                  {group.sections.map((section, si) => (
+                    <CollapsibleSection key={`h2-${gi}-${si}`} title={section.title} defaultOpen={false}>
+                      <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]} components={markdownComponents}>
+                        {section.content}
+                      </ReactMarkdown>
+                    </CollapsibleSection>
+                  ))}
+                </CollapsibleSection>
+              ))
+            ) : (
+              sections.map((section, i) => (
+                <CollapsibleSection key={i} title={section.title} defaultOpen={false}>
+                  <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]} components={markdownComponents}>
+                    {section.content}
+                  </ReactMarkdown>
+                </CollapsibleSection>
+              ))
+            )}
           </div>
         </div>
       )}

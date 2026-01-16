@@ -14,7 +14,7 @@ interface LessonCardProps {
   lang: Lang;
   onEdit: (id: string) => void;
   onDuplicate: (id: string) => void;
-  onArchive: (id: string) => void;
+  onArchive: (id: string, archived: boolean) => void;
   onDelete: (id: string) => void;
   onToggleFavorite: (id: string) => void;
 }
@@ -82,8 +82,13 @@ export function LessonCard({
             <Copy className="h-3 w-3 mr-1" />
             {t.library.duplicate}
           </Button>
-          {!lesson.isArchived && (
-            <Button variant="outline" size="sm" onClick={() => onArchive(lesson.id)}>
+          {lesson.isArchived ? (
+            <Button variant="outline" size="sm" onClick={() => onArchive(lesson.id, false)}>
+              <Archive className="h-3 w-3 mr-1" />
+              {t.library.unarchive}
+            </Button>
+          ) : (
+            <Button variant="outline" size="sm" onClick={() => onArchive(lesson.id, true)}>
               <Archive className="h-3 w-3 mr-1" />
               {t.library.archive}
             </Button>

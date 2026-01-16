@@ -7,7 +7,7 @@ import { getTranslation } from "@/lib/translations"
 import { Card, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Send, User, Bot, ArrowLeft, Loader2, ArrowDown, CheckCircle2, XCircle, Wrench } from "lucide-react"
+import { Send, Square, User, Bot, ArrowLeft, Loader2, ArrowDown, CheckCircle2, XCircle, Wrench } from "lucide-react"
 import { ChatMarkdown } from "./chat-markdown"
 
 interface ChatPanelProps {
@@ -30,6 +30,7 @@ export function ChatPanel({ lang, currentLesson, onLessonUpdate, onBackToForm, i
   const [showScrollButton, setShowScrollButton] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const abortControllerRef = useRef<AbortController | null>(null)
 
   const [isApplying, setIsApplying] = useState(false)
 
@@ -83,42 +84,51 @@ export function ChatPanel({ lang, currentLesson, onLessonUpdate, onBackToForm, i
   }, [isGenerating])
 
   useEffect(() => {
-    if (isGenerating) {
-      const thinkingSteps = [
-        { delay: 500, message: lang === "en" ? "Analyzing lesson requirements..." : "分析課程需求..." },
-        {
-          delay: 1300,
-          message:
-            lang === "en"
-              ? "Designing learning objectives based on STEAM domains..."
-              : "根據 STEAM 領域設計學習目標...",
-        },
-        {
-          delay: 2200,
-          message: lang === "en" ? "Creating activity structure and timeline..." : "創建活動結構和時間表...",
-        },
-        { delay: 3100, message: lang === "en" ? "Generating assessment criteria..." : "生成評估標準..." },
-        { delay: 3800, message: lang === "en" ? "Finalizing lesson plan..." : "完成課程計畫..." },
-      ]
+    if (!isGenerating) return
 
-      setMessages([])
+    const thinkingSteps = [
+      { message: lang === "en" ? "Analyzing lesson requirements..." : "分析課程需求..." },
+      { message: lang === "en" ? "Designing learning objectives based on STEAM domains..." : "根據 STEAM 領域設計學習目標..." },
+      { message: lang === "en" ? "Creating activity structure and timeline..." : "創建活動結構和時間表..." },
+      { message: lang === "en" ? "Generating assessment criteria..." : "生成評估標準..." },
+      { message: lang === "en" ? "Finalizing lesson plan..." : "完成課程計畫..." },
+    ]
 
-      thinkingSteps.forEach(({ delay, message }) => {
-        setTimeout(() => {
-          const thinkingMessage: ChatMessage = {
-            id: `thinking-${Date.now()}-${Math.random()}`,
-            role: "system",
-            text: message,
-            isThinking: true,
-          }
-          setMessages((prev) => [...prev, thinkingMessage])
-        }, delay)
-      })
+    // Add first message
+    const firstId = `thinking-0`
+    setMessages([{ id: firstId, role: "system", text: thinkingSteps[0].message, isThinking: true }])
+
+    const timeouts: NodeJS.Timeout[] = []
+    thinkingSteps.slice(1).forEach((step, index) => {
+      const timeout = setTimeout(() => {
+        const prevId = `thinking-${index}`
+        const newId = `thinking-${index + 1}`
+        setMessages((prev) => [
+          ...prev.map((m) => m.id === prevId ? { ...m, isThinking: false, isCompleted: true } : m),
+          { id: newId, role: "system", text: step.message, isThinking: true }
+        ])
+      }, (index + 1) * 2000)
+      timeouts.push(timeout)
+    })
+
+    return () => {
+      timeouts.forEach(clearTimeout)
     }
   }, [isGenerating, lang])
 
+  // Mark last thinking message as completed when generation finishes
+  useEffect(() => {
+    if (isGenerating) return
+    setMessages((prev) => prev.map((m) =>
+      m.role === "system" && m.isThinking ? { ...m, isThinking: false, isCompleted: true } : m
+    ))
+  }, [isGenerating])
+
   const handleSend = async () => {
     if (!inputValue.trim() || isSending) return
+
+    abortControllerRef.current = new AbortController()
+    const abortSignal = abortControllerRef.current.signal
 
     // Clear previous diffs when sending new message
     onDiffsChange?.([])
@@ -143,11 +153,17 @@ export function ChatPanel({ lang, currentLesson, onLessonUpdate, onBackToForm, i
     }
     setMessages((prev) => [...prev, aiMessage])
 
+    let fullText = ""
+    let suggestedChange: string | undefined
+    let collectedDiffs: ChatMessage['diffs'] = []
+    let collectedToolCalls: ToolCall[] = []
+
     try {
       const response = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ message: inputValue, currentLesson, lang }),
+        signal: abortSignal,
       })
 
       if (!response.ok) throw new Error("Failed to send message")
@@ -156,10 +172,6 @@ export function ChatPanel({ lang, currentLesson, onLessonUpdate, onBackToForm, i
       if (!reader) throw new Error("No reader available")
 
       const decoder = new TextDecoder()
-      let fullText = ""
-      let suggestedChange: string | undefined
-      let collectedDiffs: ChatMessage['diffs'] = []
-      let collectedToolCalls: ToolCall[] = []
 
       while (true) {
         const { done, value } = await reader.read()
@@ -181,7 +193,6 @@ export function ChatPanel({ lang, currentLesson, onLessonUpdate, onBackToForm, i
                 // Finalize current message and create new one
                 const finalText = fullText.replace(/\[(NEEDS_CHANGE|NO_CHANGE)\]/g, "").trim()
                 const finalToolCalls = collectedToolCalls.length > 0 ? [...collectedToolCalls] : undefined
-                console.log('[chat-panel] new_turn: finalizing message', currentMsgId, 'with toolCalls:', finalToolCalls?.map(t => t.name))
                 setMessages((prev) =>
                   prev.map((m) =>
                     m.id === currentMsgId
@@ -204,7 +215,6 @@ export function ChatPanel({ lang, currentLesson, onLessonUpdate, onBackToForm, i
               } else if (parsed.type === "tool_call" && parsed.toolCall) {
                 const tc = parsed.toolCall as ToolCall
                 const currentMsgId = aiMessageId
-                console.log('[chat-panel] Received tool_call:', tc.name, tc.status, 'for message:', currentMsgId)
                 const existingIdx = collectedToolCalls.findIndex(t => t.id === tc.id)
                 if (existingIdx >= 0) {
                   collectedToolCalls[existingIdx] = tc
@@ -212,7 +222,6 @@ export function ChatPanel({ lang, currentLesson, onLessonUpdate, onBackToForm, i
                   collectedToolCalls.push(tc)
                 }
                 const toolCallsCopy = [...collectedToolCalls]
-                console.log('[chat-panel] collectedToolCalls:', toolCallsCopy.length, toolCallsCopy.map(t => t.name))
                 setMessages((prev) =>
                   prev.map((m) =>
                     m.id === currentMsgId ? { ...m, toolCalls: toolCallsCopy } : m
@@ -230,10 +239,8 @@ export function ChatPanel({ lang, currentLesson, onLessonUpdate, onBackToForm, i
               } else if (parsed.type === "suggested_change") {
                 suggestedChange = "true"
               } else if (parsed.type === "diff" && parsed.diff) {
-                console.log('[chat-panel] Received diff:', parsed.diff)
                 collectedDiffs.push(parsed.diff)
               } else if (parsed.type === "done") {
-                console.log('[chat-panel] Done. Total diffs collected:', collectedDiffs.length, collectedDiffs)
                 const finalText = fullText.replace(/\[(NEEDS_CHANGE|NO_CHANGE)\]/g, "").trim()
                 const currentMsgId = aiMessageId
                 const finalToolCalls = collectedToolCalls.length > 0 ? [...collectedToolCalls] : undefined
@@ -257,21 +264,45 @@ export function ChatPanel({ lang, currentLesson, onLessonUpdate, onBackToForm, i
         }
       }
     } catch (error) {
-      console.error("Error sending message:", error)
-      setMessages((prev) =>
-        prev.map((m) =>
-          m.id === aiMessageId
-            ? { ...m, text: lang === "en" ? "Sorry, an error occurred." : "抱歉，發生錯誤。", isStreaming: false }
-            : m
+      if (error instanceof Error && error.name === "AbortError") {
+        const finalText = fullText.replace(/\[(NEEDS_CHANGE|NO_CHANGE)\]/g, "").trim()
+        const currentMsgId = aiMessageId
+        const finalToolCalls = collectedToolCalls.length > 0 ? [...collectedToolCalls] : undefined
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === currentMsgId
+              ? {
+                  ...m,
+                  text: finalText || m.text,
+                  isStreaming: false,
+                  toolCalls: finalToolCalls ?? m.toolCalls,
+                }
+              : m
+          )
         )
-      )
+      } else {
+        console.error("Error sending message:", error)
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === aiMessageId
+              ? { ...m, text: lang === "en" ? "Sorry, an error occurred." : "抱歉，發生錯誤。", isStreaming: false }
+              : m
+          )
+        )
+      }
     } finally {
+      abortControllerRef.current = null
       setIsSending(false)
     }
   }
 
+  const handleCancel = () => {
+    abortControllerRef.current?.abort("user_cancelled")
+    abortControllerRef.current = null
+    setIsSending(false)
+  }
+
   const handleApplyChanges = async (changeContent: string, diffs?: ChatMessage['diffs']) => {
-    console.log('[chat-panel] handleApplyChanges called with diffs:', diffs)
     if (!currentLesson || isApplying) return
 
     setIsApplying(true)
@@ -331,7 +362,7 @@ export function ChatPanel({ lang, currentLesson, onLessonUpdate, onBackToForm, i
 
   return (
     <Card className="h-full flex flex-col overflow-hidden !gap-0 !py-0">
-      <CardHeader className="!px-8 !pt-8 !pb-4 flex flex-row items-center justify-between space-y-0 border-b">
+      <CardHeader className="!px-4 !pt-4 !pb-4 flex flex-row items-center justify-between space-y-0 border-b">
         <CardTitle>{t.chatTitle}</CardTitle>
         {onBackToForm && !isGenerating && (
           <Button variant="ghost" size="sm" onClick={onBackToForm} className="h-8">
@@ -349,9 +380,6 @@ export function ChatPanel({ lang, currentLesson, onLessonUpdate, onBackToForm, i
             </div>
           )}
           {messages.map((message) => {
-              if (message.role === 'assistant' && !message.isThinking) {
-                console.log('[chat-panel] Rendering message:', message.id, 'text:', message.text?.slice(0, 30), 'toolCalls:', message.toolCalls?.map(t => t.name))
-              }
               return (
               <div
                 key={message.id}
@@ -363,6 +391,8 @@ export function ChatPanel({ lang, currentLesson, onLessonUpdate, onBackToForm, i
                   <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
                     {message.isThinking ? (
                       <Wrench className="h-4 w-4 text-primary animate-pulse" />
+                    ) : message.isCompleted ? (
+                      <CheckCircle2 className="h-4 w-4 text-green-500" />
                     ) : (
                       <Bot className="h-4 w-4 text-primary" />
                     )}
@@ -372,18 +402,20 @@ export function ChatPanel({ lang, currentLesson, onLessonUpdate, onBackToForm, i
                   className={`flex flex-col gap-2 max-w-[80%] ${message.role === "user" ? "items-end" : "items-start"}`}
                 >
                   {/* Message content with tool calls */}
-                  {(message.text || message.isThinking || (message.toolCalls && message.toolCalls.length > 0)) && (
+                  {(message.text || message.isThinking || message.isCompleted || (message.toolCalls && message.toolCalls.length > 0)) && (
                     <div
                       className={`rounded-lg px-4 py-2 text-sm transition-opacity duration-150 ${
                         message.role === "user"
                           ? "bg-primary text-primary-foreground"
                           : message.isThinking
                             ? "bg-muted/50 text-muted-foreground italic flex items-center gap-2"
-                            : "bg-muted"
+                            : message.isCompleted
+                              ? "bg-muted/50 text-muted-foreground flex items-center gap-2"
+                              : "bg-muted"
                       }`}
                     >
                       {message.isThinking && <Loader2 className="h-3 w-3 animate-spin" />}
-                      {message.isThinking ? (
+                      {message.isThinking || message.isCompleted ? (
                         message.text || ""
                       ) : (
                         <>
@@ -432,14 +464,27 @@ export function ChatPanel({ lang, currentLesson, onLessonUpdate, onBackToForm, i
             disabled={isSending || !currentLesson || isGenerating}
             className="h-9"
           />
-          <Button
-            onClick={handleSend}
-            disabled={isSending || !inputValue.trim() || !currentLesson || isGenerating}
-            size="sm"
-            className="h-9 px-3"
-          >
-            <Send className="h-4 w-4" />
-          </Button>
+          {isSending ? (
+            <Button
+              onClick={handleCancel}
+              size="sm"
+              variant="destructive"
+              className="h-9 px-3"
+            >
+              <Square className="h-4 w-4 mr-1" />
+              {t.stop}
+            </Button>
+          ) : (
+            <Button
+              onClick={handleSend}
+              disabled={!inputValue.trim() || !currentLesson || isGenerating}
+              size="sm"
+              className="h-9 px-3"
+            >
+              <Send className="h-4 w-4 mr-1" />
+              {t.send}
+            </Button>
+          )}
         </div>
       </div>
     </Card>

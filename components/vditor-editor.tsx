@@ -51,13 +51,14 @@ export function VditorEditorInner({ value, onChange, className, placeholder }: V
   }, [onChange])
 
   useEffect(() => {
+    // 如果 value 等于我们最后发出的值，说明是用户输入的回传，跳过 setValue
+    if (value === latestValueRef.current) return
+
     latestValueRef.current = value
 
     if (!editorRef.current) return
 
-    const editorValue = editorRef.current.getValue?.()
-    if (editorValue === value) return
-
+    // 外部值变化，同步到编辑器
     isSettingValueRef.current = true
     editorRef.current.setValue(value)
     isSettingValueRef.current = false

@@ -2,9 +2,10 @@ import { ChatOpenAI } from '@langchain/openai'
 import { HumanMessage, AIMessage, SystemMessage, ToolMessage } from '@langchain/core/messages'
 import { BlockIndexService } from './block-index'
 import { ReadWriteGuard } from './tools/middleware'
-import { createEditorTools, ToolContext } from './tools'
+import { createEditorTools, ToolContext, createListDocumentsTool, createSwitchDocumentTool, MultiDocToolContext } from './tools'
+import { DocumentManager } from './document-manager'
 import { ToolTrace, detectStuck } from './agent/runtime'
-import type { Block, PendingDiff } from './types'
+import type { Block, PendingDiff, EditorDocument } from './types'
 
 const SYSTEM_PROMPT = `You are a document editing assistant. You help users modify their documents through natural language commands.
 
@@ -32,6 +33,28 @@ Available tools:
 - edit_blocks: Batch edit blocks (max 25) - ALWAYS use this over edit_block
 - add_block: Add a new block
 - delete_block: Remove a block`
+
+const MULTI_DOC_SYSTEM_PROMPT = `You are a document editing assistant that can work with multiple documents.
+
+MULTI-DOCUMENT WORKFLOW:
+1. list_documents - see all open documents (call first if user mentions multiple docs)
+2. switch_document(docId) - switch to target document
+3. list_blocks → read_blocks → edit_blocks (operate on current document)
+
+RULES:
+- Always confirm which document you're editing
+- After switch_document, all block operations target the new document
+- Use list_documents if unsure which document to edit
+
+EFFICIENCY RULES (CRITICAL):
+1. MINIMIZE tool calls - plan ALL operations upfront
+2. Use batch operations: read_blocks, edit_blocks
+3. Maximum 4 tool calls: list_documents → switch_document → list_blocks → edit_blocks
+
+Available tools:
+- list_documents: See all open documents
+- switch_document: Switch active document
+- list_blocks, read_blocks, edit_blocks, add_block, delete_block (operate on active document)`
 
 function createLLMClient() {
   const apiKey = process.env.DEEPSEEK_API_KEY
@@ -318,6 +341,185 @@ export async function* runEditorAgentStream(
     if (!yieldedDiffIds.has(diff.id)) {
       console.log('[EditorAgentStream] Yielding remaining diff:', diff.id)
       yield { type: 'diff', data: diff }
+    }
+  }
+  yield { type: 'done' }
+}
+
+// Multi-document agent stream
+export interface MultiDocAgentResult {
+  response: string
+  pendingDiffsByDoc: Map<string, PendingDiff[]>
+}
+
+export async function* runMultiDocAgentStream(
+  userMessage: string,
+  documents: EditorDocument[],
+  activeDocId: string,
+  chatHistory: { role: 'user' | 'assistant'; content: string }[] = []
+): AsyncGenerator<AgentStreamEvent> {
+  console.log('[MultiDocAgentStream] Starting for message:', userMessage)
+  console.log('[MultiDocAgentStream] Documents:', documents.length, 'Active:', activeDocId)
+
+  const documentManager = new DocumentManager(documents, activeDocId)
+  const activeDoc = documentManager.getActiveDocument()
+  if (!activeDoc) {
+    yield { type: 'content', data: 'Error: No active document found.' }
+    yield { type: 'done' }
+    return
+  }
+
+  let blockIndex = new BlockIndexService(activeDoc.blocks)
+  const guard = new ReadWriteGuard()
+  const pendingDiffsByDoc = new Map<string, PendingDiff[]>()
+  documents.forEach(d => pendingDiffsByDoc.set(d.id, []))
+
+  const yieldedDiffIds = new Set<string>()
+  const diffQueue: PendingDiff[] = []
+
+  // Current document's pending diffs (mutable reference)
+  let currentPendingDiffs = pendingDiffsByDoc.get(activeDocId) || []
+
+  const ctx: MultiDocToolContext = {
+    documentManager,
+    blockIndex,
+    guard,
+    pendingDiffs: currentPendingDiffs,
+    pendingDiffsByDoc,
+    onDiffCreated: (diff) => {
+      const docId = documentManager.getActiveDocId()
+      const enrichedDiff = { ...diff, docId }
+      const docDiffs = pendingDiffsByDoc.get(docId) || []
+      docDiffs.push(enrichedDiff)
+      pendingDiffsByDoc.set(docId, docDiffs)
+      diffQueue.push(enrichedDiff)
+    },
+    onDocumentSwitch: (docId, blocks) => {
+      blockIndex = new BlockIndexService(blocks)
+      ctx.blockIndex = blockIndex
+      currentPendingDiffs = pendingDiffsByDoc.get(docId) || []
+      ctx.pendingDiffs = currentPendingDiffs
+    },
+  }
+
+  // Create tools with multi-doc support
+  const blockTools = createEditorTools(ctx)
+  const docTools = [
+    createListDocumentsTool(ctx),
+    createSwitchDocumentTool(ctx),
+  ]
+  const tools = [...docTools, ...blockTools]
+
+  const llm = createLLMClient()
+  const llmWithTools = llm.bindTools(tools)
+
+  const messages: (SystemMessage | HumanMessage | AIMessage)[] = [
+    new SystemMessage(MULTI_DOC_SYSTEM_PROMPT),
+  ]
+
+  for (const msg of chatHistory) {
+    if (msg.role === 'user') {
+      messages.push(new HumanMessage(msg.content))
+    } else {
+      messages.push(new AIMessage(msg.content))
+    }
+  }
+
+  messages.push(new HumanMessage(userMessage))
+
+  let iterations = 0
+  const maxIterations = 30
+  const toolTrace = new ToolTrace(maxIterations)
+
+  while (iterations < maxIterations) {
+    iterations++
+
+    if (iterations > 1) {
+      yield { type: 'new_turn' }
+    }
+
+    const response = await llmWithTools.invoke(messages)
+    messages.push(response)
+
+    const contentStr = typeof response.content === 'string' ? response.content : ''
+    const toolCalls = response.tool_calls || []
+
+    if (contentStr) {
+      yield { type: 'content', data: contentStr }
+    }
+
+    if (toolCalls.length === 0) {
+      console.log('[MultiDocAgentStream] No tool calls, done')
+      // Yield remaining diffs from all documents
+      for (const [docId, diffs] of pendingDiffsByDoc) {
+        for (const diff of diffs) {
+          if (!yieldedDiffIds.has(diff.id)) {
+            yield { type: 'diff', data: { ...diff, docId } }
+            yieldedDiffIds.add(diff.id)
+          }
+        }
+      }
+      yield { type: 'done' }
+      return
+    }
+
+    for (const toolCall of toolCalls) {
+      const callId = toolCall.id || `call_${Date.now()}`
+
+      yield {
+        type: 'tool_call',
+        data: { id: callId, name: toolCall.name, status: 'calling', args: toolCall.args }
+      }
+
+      const tool = tools.find(t => t.name === toolCall.name)
+      if (tool) {
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const result = await (tool.func as (args: any) => Promise<string>)(toolCall.args)
+
+          yield {
+            type: 'tool_call',
+            data: { id: callId, name: toolCall.name, status: 'success', result: result.slice(0, 100) }
+          }
+          toolTrace.add({ name: toolCall.name, args: toolCall.args as Record<string, unknown>, status: 'success', timestamp: Date.now() })
+
+          while (diffQueue.length > 0) {
+            const diff = diffQueue.shift()!
+            if (!yieldedDiffIds.has(diff.id)) {
+              console.log('[MultiDocAgentStream] Streaming diff:', diff.id, diff.docId)
+              yield { type: 'diff', data: diff }
+              yieldedDiffIds.add(diff.id)
+            }
+          }
+
+          messages.push(new ToolMessage({ content: result, tool_call_id: callId }))
+        } catch (error) {
+          const errorMsg = error instanceof Error ? error.message : 'Tool execution failed'
+
+          yield {
+            type: 'tool_call',
+            data: { id: callId, name: toolCall.name, status: 'error', result: errorMsg }
+          }
+          toolTrace.add({ name: toolCall.name, args: toolCall.args as Record<string, unknown>, status: 'error', timestamp: Date.now() })
+
+          messages.push(new ToolMessage({ content: `Error: ${errorMsg}`, tool_call_id: callId }))
+        }
+      }
+    }
+
+    const stuckResult = detectStuck(toolTrace)
+    if (stuckResult.isStuck) {
+      console.warn(`[MultiDocAgentStream] Stuck detected: ${stuckResult.reason}`)
+    }
+  }
+
+  console.log('[MultiDocAgentStream] Max iterations reached')
+  yield { type: 'content', data: 'Max iterations reached. Please try a simpler request.' }
+  for (const [docId, diffs] of pendingDiffsByDoc) {
+    for (const diff of diffs) {
+      if (!yieldedDiffIds.has(diff.id)) {
+        yield { type: 'diff', data: { ...diff, docId } }
+      }
     }
   }
   yield { type: 'done' }

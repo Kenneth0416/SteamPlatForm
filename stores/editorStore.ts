@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { Block, PendingDiff, BlockType } from '@/lib/editor/types'
+import type { Block, PendingDiff, BlockType, EditorDocument } from '@/lib/editor/types'
 import { parseMarkdown, blocksToMarkdown, updateBlockContent, addBlock, deleteBlock } from '@/lib/editor/parser'
 
 const MAX_UNDO_STACK = 20
@@ -11,7 +11,13 @@ interface ChatMessage {
 }
 
 interface EditorState {
-  // Document state
+  // Multi-document state
+  documents: EditorDocument[]
+  activeDocId: string | null
+  pendingDiffsByDoc: Map<string, PendingDiff[]>
+  streamingDocId: string | null  // Track which document is being streamed
+
+  // Document state (active document)
   lessonId: string | null
   blocks: Block[]
   markdown: string
@@ -63,6 +69,17 @@ interface EditorState {
   setLoading: (loading: boolean) => void
   setSaving: (saving: boolean) => void
 
+  // Multi-document actions
+  setDocuments: (docs: EditorDocument[]) => void
+  addDocument: (doc: EditorDocument) => void
+  removeDocument: (docId: string) => void
+  switchDocument: (docId: string) => void
+  updateDocumentContent: (docId: string, content: string) => void
+  appendDocumentContent: (docId: string, content: string) => void
+  markDocumentsClean: (docIds: string[]) => void
+  setStreamingDocId: (docId: string | null) => void
+  getActiveDocument: () => EditorDocument | null
+
   // Reset
   reset: () => void
 }
@@ -72,7 +89,22 @@ function pushUndo(state: EditorState, blocks: Block[]): Partial<EditorState> {
   return { undoStack: newStack, redoStack: [] }
 }
 
+function syncActiveDoc(state: EditorState, newBlocks: Block[], newMarkdown: string): Partial<EditorState> {
+  if (!state.activeDocId) return {}
+  return {
+    documents: state.documents.map(d =>
+      d.id === state.activeDocId
+        ? { ...d, content: newMarkdown, blocks: newBlocks, isDirty: true }
+        : d
+    ),
+  }
+}
+
 export const useEditorStore = create<EditorState>((set, get) => ({
+  documents: [],
+  activeDocId: null,
+  pendingDiffsByDoc: new Map(),
+  streamingDocId: null,
   lessonId: null,
   blocks: [],
   markdown: '',
@@ -101,6 +133,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     const markdown = blocksToMarkdown(newBlocks)
     set({
       ...pushUndo(state, state.blocks),
+      ...syncActiveDoc(state, newBlocks, markdown),
       blocks: newBlocks,
       markdown,
     })
@@ -112,6 +145,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     const markdown = blocksToMarkdown(newBlocks)
     set({
       ...pushUndo(state, state.blocks),
+      ...syncActiveDoc(state, newBlocks, markdown),
       blocks: newBlocks,
       markdown,
     })
@@ -123,6 +157,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     const markdown = blocksToMarkdown(newBlocks)
     set({
       ...pushUndo(state, state.blocks),
+      ...syncActiveDoc(state, newBlocks, markdown),
       blocks: newBlocks,
       markdown,
     })
@@ -255,7 +290,139 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   setLoading: (loading) => set({ isLoading: loading }),
   setSaving: (saving) => set({ isSaving: saving }),
 
+  setDocuments: (docs) => {
+    const diffMap = new Map<string, PendingDiff[]>()
+    docs.forEach(d => diffMap.set(d.id, []))
+    const activeId = docs.length > 0 ? docs[0].id : null
+    const activeDoc = docs.find(d => d.id === activeId)
+    set({
+      documents: docs,
+      activeDocId: activeId,
+      pendingDiffsByDoc: diffMap,
+      blocks: activeDoc?.blocks || [],
+      markdown: activeDoc?.content || '',
+    })
+  },
+
+  addDocument: (doc) => {
+    set(state => {
+      const newDocs = [...state.documents, doc]
+      const newMap = new Map(state.pendingDiffsByDoc)
+      newMap.set(doc.id, [])
+      // Always activate new document
+      return {
+        documents: newDocs,
+        pendingDiffsByDoc: newMap,
+        activeDocId: doc.id,
+        blocks: doc.blocks,
+        markdown: doc.content,
+        undoStack: [],
+        redoStack: [],
+      }
+    })
+  },
+
+  removeDocument: (docId) => {
+    set(state => {
+      const newDocs = state.documents.filter(d => d.id !== docId)
+      const newMap = new Map(state.pendingDiffsByDoc)
+      newMap.delete(docId)
+      const newActiveId = state.activeDocId === docId
+        ? (newDocs[0]?.id || null)
+        : state.activeDocId
+      const activeDoc = newDocs.find(d => d.id === newActiveId)
+      return {
+        documents: newDocs,
+        activeDocId: newActiveId,
+        pendingDiffsByDoc: newMap,
+        blocks: activeDoc?.blocks || [],
+        markdown: activeDoc?.content || '',
+      }
+    })
+  },
+
+  switchDocument: (docId) => {
+    const state = get()
+    if (docId === state.activeDocId) return
+    const doc = state.documents.find(d => d.id === docId)
+    if (!doc) return
+
+    // Save current document state before switching (only mark dirty if content changed)
+    const updatedDocs = state.activeDocId
+      ? state.documents.map(d => {
+          if (d.id !== state.activeDocId) return d
+          const contentChanged = d.content !== state.markdown
+          return contentChanged
+            ? { ...d, content: state.markdown, blocks: state.blocks, isDirty: true }
+            : d
+        })
+      : state.documents
+
+    const targetDoc = updatedDocs.find(d => d.id === docId)!
+    const diffs = state.pendingDiffsByDoc.get(docId) || []
+    set({
+      documents: updatedDocs,
+      activeDocId: docId,
+      blocks: targetDoc.blocks,
+      markdown: targetDoc.content,
+      pendingDiffs: diffs,
+      undoStack: [],
+      redoStack: [],
+    })
+  },
+
+  updateDocumentContent: (docId, content) => {
+    set(state => {
+      const { blocks } = parseMarkdown(content)
+      const newDocs = state.documents.map(d =>
+        d.id === docId ? { ...d, content, blocks, isDirty: true } : d
+      )
+      const isActive = state.activeDocId === docId
+      return {
+        documents: newDocs,
+        ...(isActive && { blocks, markdown: content }),
+      }
+    })
+  },
+
+  appendDocumentContent: (docId, content) => {
+    set(state => {
+      const doc = state.documents.find(d => d.id === docId)
+      if (!doc) return state
+      const newContent = doc.content + content
+      const { blocks } = parseMarkdown(newContent)
+      const newDocs = state.documents.map(d =>
+        d.id === docId ? { ...d, content: newContent, blocks, isDirty: true } : d
+      )
+      const isActive = state.activeDocId === docId
+      return {
+        documents: newDocs,
+        ...(isActive && { blocks, markdown: newContent }),
+      }
+    })
+  },
+
+  markDocumentsClean: (docIds) => {
+    if (docIds.length === 0) return
+    set(state => ({
+      documents: state.documents.map(doc =>
+        docIds.includes(doc.id) ? { ...doc, isDirty: false } : doc
+      ),
+    }))
+  },
+
+  setStreamingDocId: (docId) => set({ streamingDocId: docId }),
+
+  getActiveDocument: () => {
+    const state = get()
+    return state.documents.find(d => d.id === state.activeDocId) || null
+  },
+
   reset: () => set({
+    documents: [],
+    activeDocId: null,
+    pendingDiffsByDoc: new Map(),
+    streamingDocId: null,
     lessonId: null,
     blocks: [],
     markdown: '',

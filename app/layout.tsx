@@ -4,6 +4,7 @@ import { Analytics } from "@vercel/analytics/next"
 import "./globals.css"
 
 import { Toaster } from "@/components/ui/toaster"
+import { Toaster as SonnerToaster } from "sonner"
 import { AuthProvider } from "@/components/providers/session-provider"
 import { DM_Sans, Space_Mono, Source_Serif_4, DM_Sans as V0_Font_DM_Sans, Space_Mono as V0_Font_Space_Mono, Source_Serif_4 as V0_Font_Source_Serif_4 } from 'next/font/google'
 
@@ -64,6 +65,7 @@ export default function RootLayout({
         <AuthProvider>
           {children}
           <Toaster />
+          <SonnerToaster position="top-center" />
         </AuthProvider>
         <Analytics />
       </body>

@@ -292,3 +292,6 @@ export function createEditorTools(ctx: ToolContext) {
     createDeleteBlockTool(ctx),
   ]
 }
+
+// Re-export multi-document tools
+export { createListDocumentsTool, createSwitchDocumentTool, type MultiDocToolContext } from './document-tools'

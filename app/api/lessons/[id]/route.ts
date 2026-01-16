@@ -39,18 +39,12 @@ export async function PUT(
     const body = await request.json()
     const { markdown, requirements, tags, isFavorite, isArchived, title, chatHistory } = body
 
-    // Extract title from markdown if not provided
-    let lessonTitle = title
-    if (!lessonTitle && markdown) {
-      const titleMatch = markdown.match(/^# (.+)$/m)
-      lessonTitle = titleMatch?.[1]
-    }
-
+    // Only update title if explicitly provided (don't auto-extract from markdown on update)
     const lesson = await prisma.lesson.update({
       where: { id },
       data: {
         ...(markdown && { lessonPlan: { markdown } }),
-        ...(lessonTitle && { title: lessonTitle }),
+        ...(title && { title }),
         ...(requirements && { requirements }),
         ...(chatHistory !== undefined && { chatHistory }),
         ...(tags !== undefined && { tags }),

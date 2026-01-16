@@ -81,6 +81,7 @@ export interface ChatMessage {
   toolCalls?: ToolCall[]
   isThinking?: boolean // Added to indicate thinking/tool call messages
   isStreaming?: boolean // Added to indicate streaming message
+  isCompleted?: boolean // Added to indicate completed thinking step
 }
 
 export interface SavedLesson {

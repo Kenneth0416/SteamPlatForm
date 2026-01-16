@@ -1,9 +1,12 @@
 import '@testing-library/jest-dom'
 import { TextEncoder, TextDecoder } from 'util'
+import { ReadableStream, TransformStream } from 'stream/web'
 
 // Polyfill for Node.js environment
 global.TextEncoder = TextEncoder
 global.TextDecoder = TextDecoder as typeof global.TextDecoder
+global.ReadableStream = ReadableStream as typeof global.ReadableStream
+global.TransformStream = TransformStream as typeof global.TransformStream
 
 // Virtual mocks for optional export dependencies (not always present in the sandboxed test environment).
 jest.mock(

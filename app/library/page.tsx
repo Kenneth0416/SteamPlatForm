@@ -23,8 +23,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
-import { Search, PlusCircle } from "lucide-react"
-import Link from "next/link"
+import { Search, PlusCircle, Archive } from "lucide-react"
 
 export default function LibraryPage() {
   const router = useRouter()
@@ -33,8 +32,10 @@ export default function LibraryPage() {
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedGrades, setSelectedGrades] = useState<GradeLevel[]>([])
   const [selectedDomains, setSelectedDomains] = useState<STEAMDomain[]>([])
-  const [showArchived, setShowArchived] = useState(false)
   const [showFavoritesOnly, setShowFavoritesOnly] = useState(false)
+  const [showArchived, setShowArchived] = useState(false)
+  const [selectedTags, setSelectedTags] = useState<string[]>([])
+  const [availableTags, setAvailableTags] = useState<string[]>([])
   const [sortBy, setSortBy] = useState<SortBy>("updatedAt")
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [lessonToDelete, setLessonToDelete] = useState<string | null>(null)
@@ -44,7 +45,7 @@ export default function LibraryPage() {
 
   useEffect(() => {
     loadLessons()
-  }, [searchQuery, selectedGrades, selectedDomains, showArchived, showFavoritesOnly, sortBy, session])
+  }, [searchQuery, selectedGrades, selectedDomains, showFavoritesOnly, showArchived, selectedTags, sortBy, session])
 
   const loadLessons = async () => {
     if (!session?.user?.id) return
@@ -55,13 +56,19 @@ export default function LibraryPage() {
         userId: session.user.id,
         gradeLevels: selectedGrades,
         domains: selectedDomains,
-        showArchived,
         showFavoriteOnly: showFavoritesOnly,
+        showArchived,
+        tags: selectedTags.length > 0 ? selectedTags : undefined,
       },
       sortBy,
       "desc",
     )
     setLessons(filtered)
+
+    // Extract unique tags from all lessons for filter options
+    const allTags = new Set<string>()
+    filtered.forEach(lesson => lesson.tags?.forEach(tag => allTags.add(tag)))
+    setAvailableTags(Array.from(allTags).sort())
   }
 
   const handleGradeChange = (grade: GradeLevel, checked: boolean) => {
@@ -75,9 +82,14 @@ export default function LibraryPage() {
   const handleClearFilters = () => {
     setSelectedGrades([])
     setSelectedDomains([])
-    setShowArchived(false)
     setShowFavoritesOnly(false)
+    setShowArchived(false)
+    setSelectedTags([])
     setSearchQuery("")
+  }
+
+  const handleTagChange = (tag: string, checked: boolean) => {
+    setSelectedTags((prev) => (checked ? [...prev, tag] : prev.filter((t) => t !== tag)))
   }
 
   const handleEdit = (id: string) => {
@@ -89,8 +101,8 @@ export default function LibraryPage() {
     loadLessons()
   }
 
-  const handleArchive = async (id: string) => {
-    await archiveLesson(id)
+  const handleArchive = async (id: string, archived: boolean) => {
+    await archiveLesson(id, archived)
     loadLessons()
   }
 
@@ -133,6 +145,13 @@ export default function LibraryPage() {
             />
           </div>
           <div className="flex gap-2">
+            <Button
+              variant={showArchived ? "default" : "outline"}
+              onClick={() => setShowArchived(!showArchived)}
+            >
+              <Archive className="h-4 w-4 mr-2" />
+              {t.library.archived}
+            </Button>
             <Select value={sortBy} onValueChange={(value) => setSortBy(value as SortBy)}>
               <SelectTrigger className="w-[180px]">
                 <SelectValue placeholder={t.library.sortBy} />
@@ -143,11 +162,9 @@ export default function LibraryPage() {
                 <SelectItem value="title">{t.library.sortTitle}</SelectItem>
               </SelectContent>
             </Select>
-            <Button asChild>
-              <Link href="/">
-                <PlusCircle className="h-4 w-4 mr-2" />
-                {t.library.createNew}
-              </Link>
+            <Button onClick={() => window.location.href = "/"}>
+              <PlusCircle className="h-4 w-4 mr-2" />
+              {t.library.createNew}
             </Button>
           </div>
         </div>
@@ -158,12 +175,13 @@ export default function LibraryPage() {
               lang={lang}
               selectedGrades={selectedGrades}
               selectedDomains={selectedDomains}
-              showArchived={showArchived}
               showFavoritesOnly={showFavoritesOnly}
+              selectedTags={selectedTags}
+              availableTags={availableTags}
               onGradeChange={handleGradeChange}
               onDomainChange={handleDomainChange}
-              onShowArchivedChange={setShowArchived}
               onShowFavoritesChange={setShowFavoritesOnly}
+              onTagChange={handleTagChange}
               onClearFilters={handleClearFilters}
             />
           </aside>

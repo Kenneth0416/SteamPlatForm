@@ -31,9 +31,10 @@ model Lesson {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  blocks       DocumentBlock[]
-  versions     DocumentVersion[]
-  editHistory  EditHistory[]
+  blocks          DocumentBlock[]
+  versions        DocumentVersion[]
+  editHistory     EditHistory[]
+  editorDocuments EditorDocument[]
 
   @@index([userId])
 }
@@ -81,4 +82,19 @@ model EditHistory {
   lesson     Lesson   @relation(fields: [lessonId], references: [id], onDelete: Cascade)
 
   @@index([lessonId, createdAt])
+}
+
+model EditorDocument {
+  id        String   @id @default(cuid())
+  lessonId  String
+  name      String
+  type      String   // lesson, guide, worksheet, custom
+  content   String   @db.Text
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  lesson    Lesson   @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+
+  @@index([lessonId, order])
 }

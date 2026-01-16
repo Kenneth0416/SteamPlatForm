@@ -4,6 +4,7 @@ import { useEffect, useState, use } from 'react'
 import { useEditorStore } from '@/stores/editorStore'
 import { EditorChatPanel } from '@/components/editor/EditorChatPanel'
 import { DiffViewer } from '@/components/editor/DiffViewer'
+import { DocumentTabs } from '@/components/editor/document-tabs'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -12,8 +13,11 @@ import {
   ResizablePanel,
   ResizablePanelGroup,
 } from '@/components/ui/resizable'
-import { Undo2, Redo2, Save, Loader2, History } from 'lucide-react'
+import { Undo2, Redo2, Save, Loader2, History, Plus } from 'lucide-react'
 import { toast } from 'sonner'
+import { fetchDocuments, createDocument } from '@/lib/editor/api'
+import type { EditorDocument } from '@/lib/editor/types'
+import { useAutoSave } from '@/hooks/useAutoSave'
 
 interface PageProps {
   params: Promise<{ lessonId: string }>
@@ -27,8 +31,14 @@ export default function EditorPage({ params }: PageProps) {
     markdown,
     blocks,
     pendingDiffs,
+    documents,
+    activeDocId,
+    streamingDocId,
     setLessonId,
     setMarkdown,
+    setDocuments,
+    addDocument,
+    updateDocumentContent,
     undo,
     redo,
     canUndo,
@@ -42,6 +52,14 @@ export default function EditorPage({ params }: PageProps) {
     reset,
   } = useEditorStore()
 
+  useAutoSave({
+    currentLesson: markdown,
+    currentRequirements: null,
+    currentLessonId: lessonId,
+    streamingDocId,
+    enabled: isInitialized,
+  })
+
   useEffect(() => {
     reset()
     setLessonId(lessonId)
@@ -51,19 +69,39 @@ export default function EditorPage({ params }: PageProps) {
 
   const loadLesson = async () => {
     try {
-      const response = await fetch(`/api/lessons/${lessonId}`)
-      if (!response.ok) throw new Error('Failed to load lesson')
+      // Load existing documents from DB
+      const docs = await fetchDocuments(lessonId)
 
-      const lesson = await response.json()
-      // Convert lesson plan to markdown if needed
-      const content = typeof lesson.lessonPlan === 'string'
-        ? lesson.lessonPlan
-        : JSON.stringify(lesson.lessonPlan, null, 2)
+      if (docs.length > 0) {
+        setDocuments(docs)
+      } else {
+        // Fallback: load lesson plan as first document
+        const response = await fetch(`/api/lessons/${lessonId}`)
+        if (!response.ok) throw new Error('Failed to load lesson')
 
-      setMarkdown(content)
+        const lesson = await response.json()
+        const content = typeof lesson.lessonPlan === 'string'
+          ? lesson.lessonPlan
+          : JSON.stringify(lesson.lessonPlan, null, 2)
+
+        // Create initial document
+        const doc = await createDocument(lessonId, 'Lesson Plan', 'lesson', content)
+        setDocuments([doc])
+      }
       setIsInitialized(true)
     } catch (error) {
       toast.error('Failed to load lesson')
+    }
+  }
+
+  const handleAddDocument = async () => {
+    const name = prompt('Document name:')
+    if (!name) return
+    try {
+      const doc = await createDocument(lessonId, name, 'custom', '')
+      addDocument(doc)
+    } catch {
+      toast.error('Failed to create document')
     }
   }
 
@@ -143,6 +181,9 @@ export default function EditorPage({ params }: PageProps) {
 
   return (
     <div className="h-screen flex flex-col">
+      {/* Document Tabs */}
+      <DocumentTabs onAddDocument={handleAddDocument} />
+
       {/* Toolbar */}
       <div className="border-b p-2 flex items-center gap-2">
         <Button
@@ -201,7 +242,10 @@ export default function EditorPage({ params }: PageProps) {
             <ScrollArea className="flex-1">
               <Textarea
                 value={markdown}
-                onChange={e => setMarkdown(e.target.value)}
+                onChange={e => {
+                  setMarkdown(e.target.value)
+                  if (activeDocId) updateDocumentContent(activeDocId, e.target.value)
+                }}
                 className="min-h-full border-0 rounded-none resize-none font-mono text-sm"
                 placeholder="Enter markdown content..."
               />

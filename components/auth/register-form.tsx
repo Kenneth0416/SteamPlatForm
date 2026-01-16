@@ -2,7 +2,8 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { signIn } from 'next-auth/react';
+import { signIn, getSession } from 'next-auth/react';
+import { setCurrentUser } from '@/lib/authStorage';
 import Link from 'next/link';
 import { Lang } from '@/types/lesson';
 import { getTranslation } from '@/lib/translations';
@@ -85,6 +86,17 @@ export function RegisterForm({ lang }: RegisterFormProps) {
       if (result?.error) {
         router.push('/auth/login');
       } else {
+        // Sync NextAuth session to localStorage for lib/api.ts compatibility
+        const session = await getSession();
+        if (session?.user) {
+          setCurrentUser({
+            id: session.user.id,
+            name: session.user.name || '',
+            email: session.user.email || '',
+            role: (session.user.role as 'user' | 'admin') || 'user',
+            createdAt: new Date(),
+          });
+        }
         router.push('/');
         router.refresh();
       }

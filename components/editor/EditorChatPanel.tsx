@@ -64,6 +64,8 @@ export function EditorChatPanel() {
 
   const {
     blocks,
+    documents,
+    activeDocId,
     chatMessages,
     addChatMessage,
     updateChatMessage,
@@ -103,6 +105,8 @@ export function EditorChatPanel() {
         body: JSON.stringify({
           message: userMessage,
           blocks,
+          documents,
+          activeDocId,
           chatHistory: chatMessages.map(m => ({ role: m.role, content: m.content })),
         }),
         signal: abortController.signal,

@@ -5,6 +5,8 @@ import { getTranslation } from "@/lib/translations"
 import { Button } from "@/components/ui/button"
 import { Save, FileDown, Copy, Library, Loader2 } from "lucide-react"
 import { exportLessonPdf, exportLessonWord, saveLesson } from "@/lib/api"
+import { updateDocument } from "@/lib/editor/api"
+import { useEditorStore } from "@/stores/editorStore"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useToast } from "@/hooks/use-toast"
@@ -32,7 +34,9 @@ export function BottomActionBar({
   const router = useRouter()
   const [isExportingPdf, setIsExportingPdf] = useState(false)
   const [isExportingWord, setIsExportingWord] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
   const hasLessonContent = Boolean(currentLesson && currentLesson.trim())
+  const { documents, setDocuments } = useEditorStore()
 
   const sanitizeFilename = (value: string) =>
     value
@@ -104,28 +108,50 @@ export function BottomActionBar({
   }
 
   const handleSave = async () => {
-    if (!currentLesson || !currentRequirements) return
+    if (!currentLesson || !currentRequirements || isSaving) return
 
-    const saved = await saveLesson(currentLesson, currentRequirements, currentLessonId)
+    setIsSaving(true)
+    try {
+      // Save lesson
+      const saved = await saveLesson(currentLesson, currentRequirements, currentLessonId)
 
-    if (saved === 'auth_required') {
+      if (saved === 'auth_required') {
+        toast({
+          title: lang === "en" ? "Login Required" : "需要登入",
+          description: lang === "en" ? "Please login to save lessons" : "請登入以儲存課程",
+          variant: "destructive",
+        })
+        router.push('/auth/login')
+        return
+      }
+
+      if (saved && onSaveSuccess) {
+        onSaveSuccess(saved.id)
+      }
+
+      // Save all dirty documents
+      const dirtyDocs = documents.filter(d => d.isDirty)
+      if (dirtyDocs.length > 0) {
+        await Promise.all(
+          dirtyDocs.map(doc => updateDocument(doc.id, { content: doc.content }))
+        )
+        // Mark documents as clean
+        setDocuments(documents.map(d => ({ ...d, isDirty: false })))
+      }
+
       toast({
-        title: lang === "en" ? "Login Required" : "需要登入",
-        description: lang === "en" ? "Please login to save lessons" : "請登入以儲存課程",
+        title: lang === "en" ? "Success" : "成功",
+        description: lang === "en" ? `Lesson saved successfully!` : `課程已成功儲存！`,
+      })
+    } catch (error) {
+      toast({
+        title: lang === "en" ? "Error" : "錯誤",
+        description: lang === "en" ? "Failed to save" : "儲存失敗",
         variant: "destructive",
       })
-      router.push('/auth/login')
-      return
+    } finally {
+      setIsSaving(false)
     }
-
-    if (saved && onSaveSuccess) {
-      onSaveSuccess(saved.id)
-    }
-
-    toast({
-      title: lang === "en" ? "Success" : "成功",
-      description: lang === "en" ? `Lesson saved successfully!` : `課程已成功儲存！`,
-    })
   }
 
   const handleDuplicate = () => {
@@ -149,8 +175,12 @@ export function BottomActionBar({
           </Button>
 
           <div className="flex flex-wrap gap-2">
-            <Button onClick={handleSave} disabled={!currentLesson} variant="default" size="sm">
-              <Save className="h-4 w-4 mr-2" />
+            <Button onClick={handleSave} disabled={!currentLesson || isSaving} variant="default" size="sm">
+              {isSaving ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <Save className="h-4 w-4 mr-2" />
+              )}
               {t.save}
             </Button>
             <Button
