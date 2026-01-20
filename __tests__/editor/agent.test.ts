@@ -28,7 +28,7 @@ describe('ToolContext interface', () => {
     }
 
     const tools = createEditorTools(ctx)
-    expect(tools.length).toBe(7) // 7 tools including batch tools
+    expect(tools.length).toBe(5) // 5 batch tools only
   })
 
   it('should include batch tools in createEditorTools', async () => {

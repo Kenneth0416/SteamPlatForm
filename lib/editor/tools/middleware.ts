@@ -41,7 +41,7 @@ export class ReadWriteGuard {
     if (!this.readBlocks.has(blockId)) {
       return {
         allowed: false,
-        error: `Must call read_block("${blockId}") before editing. Read the block content first to ensure accurate edits.`,
+        error: `Must call read_blocks(["${blockId}"]) before editing. Read the block content first to ensure accurate edits.`,
       }
     }
     return { allowed: true }
@@ -57,7 +57,7 @@ export class ReadWriteGuard {
     }
     for (const id of blockIds) {
       if (!this.readBlocks.has(id)) {
-        errors.set(id, `Must call read_block("${id}") or read_blocks first.`)
+        errors.set(id, `Must call read_blocks first.`)
       }
     }
     return { allowed: errors.size === 0, errors }

@@ -1,4 +1,5 @@
 import '@testing-library/jest-dom'
+import { IDBKeyRange, indexedDB as fakeIndexedDb } from 'fake-indexeddb'
 import { TextEncoder, TextDecoder } from 'util'
 import { ReadableStream, TransformStream } from 'stream/web'
 
@@ -7,6 +8,43 @@ global.TextEncoder = TextEncoder
 global.TextDecoder = TextDecoder as typeof global.TextDecoder
 global.ReadableStream = ReadableStream as typeof global.ReadableStream
 global.TransformStream = TransformStream as typeof global.TransformStream
+
+Object.defineProperty(global, 'indexedDB', {
+  value: fakeIndexedDb,
+  configurable: true,
+  writable: true,
+})
+Object.defineProperty(globalThis, 'indexedDB', {
+  value: fakeIndexedDb,
+  configurable: true,
+  writable: true,
+})
+Object.defineProperty(global, 'IDBKeyRange', {
+  value: IDBKeyRange,
+  configurable: true,
+  writable: true,
+})
+Object.defineProperty(globalThis, 'IDBKeyRange', {
+  value: IDBKeyRange,
+  configurable: true,
+  writable: true,
+})
+if (typeof window !== 'undefined') {
+  Object.defineProperty(window, 'indexedDB', {
+    value: fakeIndexedDb,
+    configurable: true,
+    writable: true,
+  })
+  Object.defineProperty(window, 'IDBKeyRange', {
+    value: IDBKeyRange,
+    configurable: true,
+    writable: true,
+  })
+}
+
+if (typeof globalThis.structuredClone !== 'function') {
+  globalThis.structuredClone = (value: unknown) => JSON.parse(JSON.stringify(value)) as unknown
+}
 
 // Virtual mocks for optional export dependencies (not always present in the sandboxed test environment).
 jest.mock(

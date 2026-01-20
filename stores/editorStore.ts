@@ -3,6 +3,7 @@ import type { Block, PendingDiff, BlockType, EditorDocument } from '@/lib/editor
 import { parseMarkdown, blocksToMarkdown, updateBlockContent, addBlock, deleteBlock } from '@/lib/editor/parser'
 
 const MAX_UNDO_STACK = 20
+export const DOCUMENT_SWITCH_LOCK_TIMEOUT_MS = 2000
 
 interface ChatMessage {
   id: string
@@ -16,6 +17,7 @@ interface EditorState {
   activeDocId: string | null
   pendingDiffsByDoc: Map<string, PendingDiff[]>
   streamingDocId: string | null  // Track which document is being streamed
+  isDocumentSwitchLocked: boolean
 
   // Document state (active document)
   lessonId: string | null
@@ -74,6 +76,7 @@ interface EditorState {
   addDocument: (doc: EditorDocument) => void
   removeDocument: (docId: string) => void
   switchDocument: (docId: string) => void
+  withDocumentSwitchLock: (operation: () => void | Promise<void>) => Promise<void>
   updateDocumentContent: (docId: string, content: string) => void
   appendDocumentContent: (docId: string, content: string) => void
   markDocumentsClean: (docIds: string[]) => void
@@ -100,11 +103,79 @@ function syncActiveDoc(state: EditorState, newBlocks: Block[], newMarkdown: stri
   }
 }
 
-export const useEditorStore = create<EditorState>((set, get) => ({
-  documents: [],
-  activeDocId: null,
-  pendingDiffsByDoc: new Map(),
-  streamingDocId: null,
+export const useEditorStore = create<EditorState>((set, get) => {
+  const documentSwitchLock = {
+    locked: false,
+    queue: [] as Array<() => void>,
+    timer: null as ReturnType<typeof setTimeout> | null,
+  }
+
+  const releaseDocumentSwitchLock = () => {
+    if (documentSwitchLock.timer) {
+      clearTimeout(documentSwitchLock.timer)
+      documentSwitchLock.timer = null
+    }
+    documentSwitchLock.locked = false
+    set({ isDocumentSwitchLocked: false })
+    const next = documentSwitchLock.queue.shift()
+    if (next) next()
+  }
+
+  const withDocumentSwitchLock = (operation: () => void | Promise<void>) => (
+    new Promise<void>((resolve) => {
+      const execute = () => {
+        let finished = false
+        const finalize = () => {
+          if (finished) return
+          finished = true
+          releaseDocumentSwitchLock()
+          resolve()
+        }
+
+        documentSwitchLock.locked = true
+        set({ isDocumentSwitchLocked: true })
+        documentSwitchLock.timer = setTimeout(() => {
+          finalize()
+        }, DOCUMENT_SWITCH_LOCK_TIMEOUT_MS)
+
+        let result: void | Promise<void>
+        try {
+          result = operation()
+        } catch {
+          result = undefined
+        }
+
+        Promise.resolve(result)
+          .catch(() => {})
+          .finally(() => {
+            finalize()
+          })
+      }
+
+      if (documentSwitchLock.locked) {
+        documentSwitchLock.queue.push(execute)
+      } else {
+        execute()
+      }
+    })
+  )
+
+  const clearDocumentSwitchLock = () => {
+    if (documentSwitchLock.timer) {
+      clearTimeout(documentSwitchLock.timer)
+      documentSwitchLock.timer = null
+    }
+    documentSwitchLock.queue = []
+    documentSwitchLock.locked = false
+    set({ isDocumentSwitchLocked: false })
+  }
+
+  return {
+    documents: [],
+    activeDocId: null,
+    pendingDiffsByDoc: new Map(),
+    streamingDocId: null,
+    isDocumentSwitchLocked: false,
   lessonId: null,
   blocks: [],
   markdown: '',
@@ -227,18 +298,28 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     }
 
     const markdown = blocksToMarkdown(newBlocks)
+    const newPendingDiffs = state.pendingDiffs.filter(d => d.id !== diffId)
+    const newMap = new Map(state.pendingDiffsByDoc)
+    if (state.activeDocId) newMap.set(state.activeDocId, newPendingDiffs)
     set({
       ...pushUndo(state, state.blocks),
       blocks: newBlocks,
       markdown,
-      pendingDiffs: state.pendingDiffs.filter(d => d.id !== diffId),
+      pendingDiffs: newPendingDiffs,
+      pendingDiffsByDoc: newMap,
     })
   },
 
   rejectDiff: (diffId) => {
-    set(state => ({
-      pendingDiffs: state.pendingDiffs.filter(d => d.id !== diffId),
-    }))
+    set(state => {
+      const newPendingDiffs = state.pendingDiffs.filter(d => d.id !== diffId)
+      const newMap = new Map(state.pendingDiffsByDoc)
+      if (state.activeDocId) newMap.set(state.activeDocId, newPendingDiffs)
+      return {
+        pendingDiffs: newPendingDiffs,
+        pendingDiffsByDoc: newMap,
+      }
+    })
   },
 
   applyAllDiffs: () => {
@@ -263,15 +344,27 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     }
 
     const markdown = blocksToMarkdown(newBlocks)
+    const newMap = new Map(state.pendingDiffsByDoc)
+    if (state.activeDocId) newMap.set(state.activeDocId, [])
     set({
       ...pushUndo(state, state.blocks),
       blocks: newBlocks,
       markdown,
       pendingDiffs: [],
+      pendingDiffsByDoc: newMap,
     })
   },
 
-  rejectAllDiffs: () => set({ pendingDiffs: [] }),
+  rejectAllDiffs: () => {
+    set(state => {
+      const newMap = new Map(state.pendingDiffsByDoc)
+      if (state.activeDocId) newMap.set(state.activeDocId, [])
+      return {
+        pendingDiffs: [],
+        pendingDiffsByDoc: newMap,
+      }
+    })
+  },
 
   addChatMessage: (message) => {
     set(state => ({ chatMessages: [...state.chatMessages, message] }))
@@ -323,53 +416,59 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   },
 
   removeDocument: (docId) => {
-    set(state => {
-      const newDocs = state.documents.filter(d => d.id !== docId)
-      const newMap = new Map(state.pendingDiffsByDoc)
-      newMap.delete(docId)
-      const newActiveId = state.activeDocId === docId
-        ? (newDocs[0]?.id || null)
-        : state.activeDocId
-      const activeDoc = newDocs.find(d => d.id === newActiveId)
-      return {
-        documents: newDocs,
-        activeDocId: newActiveId,
-        pendingDiffsByDoc: newMap,
-        blocks: activeDoc?.blocks || [],
-        markdown: activeDoc?.content || '',
-      }
+    get().withDocumentSwitchLock(() => {
+      set(state => {
+        const newDocs = state.documents.filter(d => d.id !== docId)
+        const newMap = new Map(state.pendingDiffsByDoc)
+        newMap.delete(docId)
+        const newActiveId = state.activeDocId === docId
+          ? (newDocs[0]?.id || null)
+          : state.activeDocId
+        const activeDoc = newDocs.find(d => d.id === newActiveId)
+        return {
+          documents: newDocs,
+          activeDocId: newActiveId,
+          pendingDiffsByDoc: newMap,
+          blocks: activeDoc?.blocks || [],
+          markdown: activeDoc?.content || '',
+        }
+      })
     })
   },
 
   switchDocument: (docId) => {
-    const state = get()
-    if (docId === state.activeDocId) return
-    const doc = state.documents.find(d => d.id === docId)
-    if (!doc) return
+    get().withDocumentSwitchLock(() => {
+      const state = get()
+      if (docId === state.activeDocId) return
+      const doc = state.documents.find(d => d.id === docId)
+      if (!doc) return
 
-    // Save current document state before switching (only mark dirty if content changed)
-    const updatedDocs = state.activeDocId
-      ? state.documents.map(d => {
-          if (d.id !== state.activeDocId) return d
-          const contentChanged = d.content !== state.markdown
-          return contentChanged
-            ? { ...d, content: state.markdown, blocks: state.blocks, isDirty: true }
-            : d
-        })
-      : state.documents
+      // Save current document state before switching (only mark dirty if content changed)
+      const updatedDocs = state.activeDocId
+        ? state.documents.map(d => {
+            if (d.id !== state.activeDocId) return d
+            const contentChanged = d.content !== state.markdown
+            return contentChanged
+              ? { ...d, content: state.markdown, blocks: state.blocks, isDirty: true }
+              : d
+          })
+        : state.documents
 
-    const targetDoc = updatedDocs.find(d => d.id === docId)!
-    const diffs = state.pendingDiffsByDoc.get(docId) || []
-    set({
-      documents: updatedDocs,
-      activeDocId: docId,
-      blocks: targetDoc.blocks,
-      markdown: targetDoc.content,
-      pendingDiffs: diffs,
-      undoStack: [],
-      redoStack: [],
+      const targetDoc = updatedDocs.find(d => d.id === docId)!
+      const diffs = state.pendingDiffsByDoc.get(docId) || []
+      set({
+        documents: updatedDocs,
+        activeDocId: docId,
+        blocks: targetDoc.blocks,
+        markdown: targetDoc.content,
+        pendingDiffs: diffs,
+        undoStack: [],
+        redoStack: [],
+      })
     })
   },
+
+  withDocumentSwitchLock,
 
   updateDocumentContent: (docId, content) => {
     set(state => {
@@ -418,19 +517,24 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     return state.documents.find(d => d.id === state.activeDocId) || null
   },
 
-  reset: () => set({
-    documents: [],
-    activeDocId: null,
-    pendingDiffsByDoc: new Map(),
-    streamingDocId: null,
-    lessonId: null,
-    blocks: [],
-    markdown: '',
-    undoStack: [],
-    redoStack: [],
-    pendingDiffs: [],
-    chatMessages: [],
-    isLoading: false,
-    isSaving: false,
-  }),
-}))
+  reset: () => {
+    clearDocumentSwitchLock()
+    set({
+      documents: [],
+      activeDocId: null,
+      pendingDiffsByDoc: new Map(),
+      streamingDocId: null,
+      isDocumentSwitchLocked: false,
+      lessonId: null,
+      blocks: [],
+      markdown: '',
+      undoStack: [],
+      redoStack: [],
+      pendingDiffs: [],
+      chatMessages: [],
+      isLoading: false,
+      isSaving: false,
+    })
+  },
+  }
+})

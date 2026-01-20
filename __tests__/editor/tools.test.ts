@@ -19,8 +19,8 @@ import { BlockIndexService } from '@/lib/editor/block-index'
 import { ReadWriteGuard } from '@/lib/editor/tools/middleware'
 import {
   createListBlocksTool,
-  createReadBlockTool,
-  createEditBlockTool,
+  createReadBlocksTool,
+  createEditBlocksTool,
   createAddBlockTool,
   createDeleteBlockTool,
   createEditorTools,
@@ -66,117 +66,134 @@ describe('LLM Tools', () => {
     })
   })
 
-  describe('read_block tool', () => {
-    it('should return block content with context', async () => {
-      const tool = createReadBlockTool(ctx)
-      const result = await tool.func({ blockId: 'b2' })
+  describe('read_blocks tool', () => {
+    it('should read multiple blocks', async () => {
+      const tool = createReadBlocksTool(ctx)
+      const result = await tool.func({ blockIds: ['b1', 'b2'] })
 
-      expect(result).toContain('This is the first paragraph.')
-      expect(result).toContain('paragraph')
-      expect(result).toContain('Context before')
-      expect(result).toContain('Context after')
+      const parsed = JSON.parse(result)
+      expect(parsed.blocks).toHaveLength(2)
+      expect(parsed.blocks[0].id).toBe('b1')
+      expect(parsed.blocks[0].ok).toBe(true)
+      expect(parsed.blocks[0].content).toBe('Introduction')
+      expect(parsed.blocks[1].id).toBe('b2')
+      expect(parsed.blocks[1].content).toBe('This is the first paragraph.')
     })
 
-    it('should mark block as read', async () => {
-      const tool = createReadBlockTool(ctx)
-      await tool.func({ blockId: 'b2' })
+    it('should include context when requested', async () => {
+      const tool = createReadBlocksTool(ctx)
+      const result = await tool.func({ blockIds: ['b2'], withContext: true })
 
-      expect(ctx.guard.hasReadBlock('b2')).toBe(true)
+      const parsed = JSON.parse(result)
+      expect(parsed.blocks[0].contextBefore).toBeDefined()
+      expect(parsed.blocks[0].contextAfter).toBeDefined()
     })
 
-    it('should return error for non-existent block', async () => {
-      const tool = createReadBlockTool(ctx)
-      const result = await tool.func({ blockId: 'nonexistent' })
+    it('should handle non-existent blocks', async () => {
+      const tool = createReadBlocksTool(ctx)
+      const result = await tool.func({ blockIds: ['nonexistent'] })
 
-      expect(result).toContain('Error')
-      expect(result).toContain('not found')
+      const parsed = JSON.parse(result)
+      expect(parsed.blocks[0].ok).toBe(false)
+      expect(parsed.blocks[0].error).toBe('Block not found')
     })
   })
 
-  describe('edit_block tool', () => {
-    it('should create pending diff when properly authorized', async () => {
+  describe('edit_blocks tool', () => {
+    it('should create pending diffs for multiple edits', async () => {
       ctx.guard.markDocumentRead()
-      ctx.guard.markBlockRead('b2')
+      ctx.guard.markBlocksRead(['b1', 'b2'])
 
-      const tool = createEditBlockTool(ctx)
+      const tool = createEditBlocksTool(ctx)
       const result = await tool.func({
-        blockId: 'b2',
-        newContent: 'Updated paragraph.',
-        reason: 'User requested update',
+        edits: [
+          { blockId: 'b1', newContent: 'Updated heading', reason: 'Update title' },
+          { blockId: 'b2', newContent: 'Updated paragraph', reason: 'Update content' },
+        ],
       })
 
-      expect(result).toContain('pending edit')
-      expect(pendingDiffs).toHaveLength(1)
-      expect(pendingDiffs[0].action).toBe('update')
-      expect(pendingDiffs[0].oldContent).toBe('This is the first paragraph.')
-      expect(pendingDiffs[0].newContent).toBe('Updated paragraph.')
+      const parsed = JSON.parse(result)
+      expect(parsed.results).toHaveLength(2)
+      expect(parsed.results[0].ok).toBe(true)
+      expect(parsed.results[1].ok).toBe(true)
+      expect(pendingDiffs).toHaveLength(2)
     })
 
-    it('should reject edit without reading document first', async () => {
-      const tool = createEditBlockTool(ctx)
-      const result = await tool.func({
-        blockId: 'b2',
-        newContent: 'Updated',
-        reason: 'Test',
-      })
-
-      expect(result).toContain('Error')
-      expect(result).toContain('list_blocks')
-      expect(pendingDiffs).toHaveLength(0)
-    })
-
-    it('should reject edit without reading block first', async () => {
+    it('should handle errors for individual edits', async () => {
       ctx.guard.markDocumentRead()
+      ctx.guard.markBlockRead('b1')
 
-      const tool = createEditBlockTool(ctx)
+      const tool = createEditBlocksTool(ctx)
       const result = await tool.func({
-        blockId: 'b2',
-        newContent: 'Updated',
-        reason: 'Test',
+        edits: [
+          { blockId: 'b1', newContent: 'Updated', reason: 'Test' },
+          { blockId: 'nonexistent', newContent: 'Updated', reason: 'Test' },
+        ],
       })
 
-      expect(result).toContain('Error')
-      expect(result).toContain('read_block')
-      expect(pendingDiffs).toHaveLength(0)
+      const parsed = JSON.parse(result)
+      expect(parsed.results[0].ok).toBe(true)
+      expect(parsed.results[1].ok).toBe(false)
+      expect(parsed.results[1].error).toContain('read_blocks')
     })
 
-    it('should return error for non-existent block', async () => {
-      ctx.guard.markDocumentRead()
-      ctx.guard.markBlockRead('nonexistent')
-
-      const tool = createEditBlockTool(ctx)
-      const result = await tool.func({
-        blockId: 'nonexistent',
-        newContent: 'Updated',
-        reason: 'Test',
-      })
-
-      expect(result).toContain('Error')
-      expect(result).toContain('not found')
-    })
-
-    it('should call onDiffCreated callback', async () => {
+    it('should call onDiffCreated for each edit', async () => {
       const onDiffCreated = jest.fn()
       ctx.onDiffCreated = onDiffCreated
       ctx.guard.markDocumentRead()
-      ctx.guard.markBlockRead('b2')
+      ctx.guard.markBlocksRead(['b1', 'b2'])
 
-      const tool = createEditBlockTool(ctx)
+      const tool = createEditBlocksTool(ctx)
       await tool.func({
-        blockId: 'b2',
-        newContent: 'Updated',
-        reason: 'Test',
+        edits: [
+          { blockId: 'b1', newContent: 'Updated 1', reason: 'Test 1' },
+          { blockId: 'b2', newContent: 'Updated 2', reason: 'Test 2' },
+        ],
       })
 
-      expect(onDiffCreated).toHaveBeenCalledTimes(1)
-      expect(onDiffCreated).toHaveBeenCalledWith(expect.objectContaining({
-        action: 'update',
-        blockId: 'b2',
-      }))
+      expect(onDiffCreated).toHaveBeenCalledTimes(2)
+    })
+
+    it('should handle deleted blocks', async () => {
+      ctx.guard.markDocumentRead()
+      ctx.guard.markBlockRead('b1')
+
+      // Simulate a deleted block by adding a delete diff
+      ctx.pendingDiffs.push({
+        id: 'diff-1',
+        blockId: 'b1',
+        action: 'delete',
+        oldContent: 'Introduction',
+        newContent: '',
+        reason: 'Test delete',
+      })
+
+      const tool = createEditBlocksTool(ctx)
+      const result = await tool.func({
+        edits: [{ blockId: 'b1', newContent: 'Updated', reason: 'Test' }],
+      })
+
+      const parsed = JSON.parse(result)
+      expect(parsed.results[0].ok).toBe(false)
+      expect(parsed.results[0].error).toContain('not found or deleted')
     })
   })
 
   describe('add_block tool', () => {
+    it('should reject empty content', async () => {
+      ctx.guard.markDocumentRead()
+
+      const tool = createAddBlockTool(ctx)
+      const result = await tool.func({
+        afterBlockId: 'b1',
+        type: 'paragraph',
+        content: '   ',
+        reason: 'Test',
+      })
+
+      expect(result).toContain('Error')
+      expect(result).toContain('empty or whitespace-only')
+    })
     it('should create pending diff for adding block', async () => {
       ctx.guard.markDocumentRead()
 
@@ -270,18 +287,30 @@ describe('LLM Tools', () => {
       expect(result).toContain('Error')
       expect(pendingDiffs).toHaveLength(0)
     })
+
+    it('should return error for non-existent block', async () => {
+      ctx.guard.markDocumentRead()
+      ctx.guard.markBlockRead('nonexistent')
+
+      const tool = createDeleteBlockTool(ctx)
+      const result = await tool.func({
+        blockId: 'nonexistent',
+        reason: 'Test',
+      })
+
+      expect(result).toContain('Error')
+      expect(result).toContain('not found')
+    })
   })
 
   describe('createEditorTools', () => {
-    it('should create all 7 tools', () => {
+    it('should create all 5 tools', () => {
       const tools = createEditorTools(ctx)
 
-      expect(tools).toHaveLength(7)
+      expect(tools).toHaveLength(5)
       expect(tools.map(t => t.name)).toEqual([
         'list_blocks',
-        'read_block',
         'read_blocks',
-        'edit_block',
         'edit_blocks',
         'add_block',
         'delete_block',

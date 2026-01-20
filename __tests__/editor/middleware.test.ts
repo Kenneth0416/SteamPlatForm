@@ -33,6 +33,18 @@ describe('ReadWriteGuard', () => {
       expect(guard.hasReadBlock('block-1')).toBe(true)
       expect(guard.hasReadBlock('block-2')).toBe(false)
     })
+
+    it('should track multiple blocks with markBlocksRead', () => {
+      guard.markBlocksRead(['block-1', 'block-2'])
+      expect(guard.hasReadBlock('block-1')).toBe(true)
+      expect(guard.hasReadBlock('block-2')).toBe(true)
+    })
+
+    it('should check if all blocks are read with hasReadBlocks', () => {
+      guard.markBlocksRead(['block-1', 'block-2'])
+      expect(guard.hasReadBlocks(['block-1', 'block-2'])).toBe(true)
+      expect(guard.hasReadBlocks(['block-1', 'block-3'])).toBe(false)
+    })
   })
 
   describe('canEdit', () => {
@@ -46,7 +58,7 @@ describe('ReadWriteGuard', () => {
       guard.markDocumentRead()
       const result = guard.canEdit('block-1')
       expect(result.allowed).toBe(false)
-      expect(result.error).toContain('read_block')
+      expect(result.error).toContain('read_blocks')
     })
 
     it('should allow edit if both document and block read', () => {
@@ -55,6 +67,31 @@ describe('ReadWriteGuard', () => {
       const result = guard.canEdit('block-1')
       expect(result.allowed).toBe(true)
       expect(result.error).toBeUndefined()
+    })
+  })
+
+  describe('canEditBlocks', () => {
+    it('should deny edit if document not read', () => {
+      const result = guard.canEditBlocks(['block-1', 'block-2'])
+      expect(result.allowed).toBe(false)
+      expect(result.errors.size).toBe(2)
+      expect(result.errors.get('block-1')).toContain('list_blocks')
+    })
+
+    it('should deny edit if blocks not read', () => {
+      guard.markDocumentRead()
+      const result = guard.canEditBlocks(['block-1', 'block-2'])
+      expect(result.allowed).toBe(false)
+      expect(result.errors.size).toBe(2)
+      expect(result.errors.get('block-1')).toContain('read_blocks')
+    })
+
+    it('should allow edit if all blocks read', () => {
+      guard.markDocumentRead()
+      guard.markBlocksRead(['block-1', 'block-2'])
+      const result = guard.canEditBlocks(['block-1', 'block-2'])
+      expect(result.allowed).toBe(true)
+      expect(result.errors.size).toBe(0)
     })
   })
 

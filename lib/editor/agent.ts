@@ -11,9 +11,8 @@ const SYSTEM_PROMPT = `You are a document editing assistant. You help users modi
 
 EFFICIENCY RULES (CRITICAL):
 1. MINIMIZE tool calls - plan ALL operations upfront, execute in ONE batch
-2. NEVER use read_block/edit_block when multiple blocks are involved - ALWAYS use read_blocks/edit_blocks
-3. After list_blocks, you should know exactly which blocks to read/edit - do it in ONE call
-4. Maximum 3 tool calls per request: list_blocks → read_blocks → edit_blocks
+2. After list_blocks, you should know exactly which blocks to read/edit - do it in ONE call
+3. Maximum 3 tool calls per request: list_blocks → read_blocks → edit_blocks
 
 WORKFLOW (follow strictly):
 1. list_blocks - get document structure (REQUIRED first step)
@@ -29,8 +28,8 @@ RULES:
 
 Available tools:
 - list_blocks: See document structure with previews (call first)
-- read_blocks: Batch read blocks (max 25) - ALWAYS use this over read_block
-- edit_blocks: Batch edit blocks (max 25) - ALWAYS use this over edit_block
+- read_blocks: Batch read blocks (max 25)
+- edit_blocks: Batch edit blocks (max 25)
 - add_block: Add a new block
 - delete_block: Remove a block`
 
@@ -100,7 +99,7 @@ export async function runEditorAgent(
   const llmWithTools = llm.bindTools(tools)
 
   // Build message history
-  const messages: (SystemMessage | HumanMessage | AIMessage)[] = [
+  const messages: (SystemMessage | HumanMessage | AIMessage | ToolMessage)[] = [
     new SystemMessage(SYSTEM_PROMPT),
   ]
 
@@ -228,7 +227,7 @@ export async function* runEditorAgentStream(
   const llm = createLLMClient()
   const llmWithTools = llm.bindTools(tools)
 
-  const messages: (SystemMessage | HumanMessage | AIMessage)[] = [
+  const messages: (SystemMessage | HumanMessage | AIMessage | ToolMessage)[] = [
     new SystemMessage(SYSTEM_PROMPT),
   ]
 
@@ -413,7 +412,7 @@ export async function* runMultiDocAgentStream(
   const llm = createLLMClient()
   const llmWithTools = llm.bindTools(tools)
 
-  const messages: (SystemMessage | HumanMessage | AIMessage)[] = [
+  const messages: (SystemMessage | HumanMessage | AIMessage | ToolMessage)[] = [
     new SystemMessage(MULTI_DOC_SYSTEM_PROMPT),
   ]
 

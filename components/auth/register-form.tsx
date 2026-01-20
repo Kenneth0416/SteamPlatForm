@@ -9,11 +9,13 @@ import { Lang } from '@/types/lesson';
 import { getTranslation } from '@/lib/translations';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { EmailInput } from '@/components/ui/email-input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Mail, Lock, User, AlertCircle } from 'lucide-react';
+import { validateEmail } from '@/lib/validation/email';
 
 interface RegisterFormProps {
   lang: Lang;
@@ -39,8 +41,8 @@ export function RegisterForm({ lang }: RegisterFormProps) {
       setError(t.auth.requiredField);
       return;
     }
-    
-    if (!email.includes('@')) {
+
+    if (!validateEmail(email)) {
       setError(t.auth.invalidEmail);
       return;
     }
@@ -145,13 +147,12 @@ export function RegisterForm({ lang }: RegisterFormProps) {
           <div className="space-y-2">
             <Label htmlFor="email">{t.auth.email}</Label>
             <div className="relative">
-              <Mail className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-              <Input
+              <Mail className="absolute left-3 top-3 h-4 w-4 text-muted-foreground z-10" />
+              <EmailInput
                 id="email"
-                type="email"
-                placeholder={t.auth.emailPlaceholder}
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                onChange={setEmail}
+                placeholder={t.auth.emailPlaceholder}
                 className="pl-10"
                 disabled={isLoading}
               />

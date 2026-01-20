@@ -52,24 +52,26 @@ export function useAutoSave({
   }, [currentLesson, currentLessonId, currentRequirements])
 
   const queueFailedSaves = useCallback(
-    (shouldQueueLesson: boolean, failedDocs: EditorDocument[]) => {
+    async (shouldQueueLesson: boolean, failedDocs: EditorDocument[]) => {
       const lessonIdForQueue = currentLessonId || lastLessonIdRef.current || 'unsaved'
 
       if (shouldQueueLesson && currentRequirements) {
-        enqueueSave({
+        await enqueueSave({
           type: 'lesson',
           lessonId: lessonIdForQueue,
           payload: { markdown: currentLesson, requirements: currentRequirements },
         })
       }
 
-      failedDocs.forEach((doc) => {
-        enqueueSave({
-          type: 'document',
-          lessonId: lessonIdForQueue,
-          payload: { docId: doc.id, content: doc.content },
-        })
-      })
+      await Promise.all(
+        failedDocs.map((doc) =>
+          enqueueSave({
+            type: 'document',
+            lessonId: lessonIdForQueue,
+            payload: { docId: doc.id, content: doc.content },
+          }),
+        ),
+      )
     },
     [currentLesson, currentLessonId, currentRequirements],
   )
@@ -77,7 +79,7 @@ export function useAutoSave({
   const retryQueuedSaves = useCallback(async () => {
     if (streamingDocId || useEditorStore.getState().isSaving) return
 
-    const queued = getQueue()
+    const queued = await getQueue()
     if (queued.length === 0) return
 
     const cleanedDocIds: string[] = []
@@ -95,7 +97,7 @@ export function useAutoSave({
               lastSavedLessonRef.current = markdown
               lastSavedRequirementsRef.current = requirements
               lastLessonIdRef.current = item.lessonId || result?.id || lastLessonIdRef.current
-              dequeueSave(item.id)
+              await dequeueSave(item.id)
             }
           } else {
             const { docId, content } = item.payload
@@ -103,7 +105,7 @@ export function useAutoSave({
 
             await updateDocument(docId, { content })
             cleanedDocIds.push(docId)
-            dequeueSave(item.id)
+            await dequeueSave(item.id)
           }
         } catch {
           // Keep the item in the queue for the next retry attempt
@@ -168,7 +170,7 @@ export function useAutoSave({
       }
 
       if (lessonFailed || failedDocs.length > 0) {
-        queueFailedSaves(lessonFailed, failedDocs)
+        await queueFailedSaves(lessonFailed, failedDocs)
         toast({
           title: 'Auto-save failed',
           description: 'Changes will be retried when you are back online.',

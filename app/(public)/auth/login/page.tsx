@@ -9,11 +9,13 @@ export default function LoginPage() {
   const [currentLang, setCurrentLang] = useState<Lang>('en');
 
   return (
-    <div className="space-y-6">
-      <div className="flex justify-end">
-        <LanguageToggle currentLang={currentLang} onToggle={setCurrentLang} />
+    <div className="min-h-screen flex items-center justify-center p-4">
+      <div className="w-full max-w-md space-y-6">
+        <div className="flex justify-end">
+          <LanguageToggle currentLang={currentLang} onToggle={setCurrentLang} />
+        </div>
+        <LoginForm lang={currentLang} />
       </div>
-      <LoginForm lang={currentLang} />
     </div>
   );
 }

@@ -54,11 +54,7 @@ export const metadata: Metadata = {
   },
 }
 
-<<<<<<< HEAD
-export default async function RootLayout({
-=======
 export default function RootLayout({
->>>>>>> e0bb96a57e971e672adccecfd97587cf394a8f9d
   children,
 }: Readonly<{
   children: React.ReactNode

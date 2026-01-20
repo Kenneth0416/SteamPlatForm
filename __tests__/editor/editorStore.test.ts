@@ -38,8 +38,14 @@ jest.mock('unified', () => ({
 jest.mock('remark-parse', () => jest.fn())
 jest.mock('remark-stringify', () => jest.fn())
 
-import { useEditorStore } from '@/stores/editorStore'
+import { DOCUMENT_SWITCH_LOCK_TIMEOUT_MS, useEditorStore } from '@/stores/editorStore'
 import type { Block, EditorDocument, PendingDiff } from '@/lib/editor/types'
+
+const flushMicrotasks = async (steps = 6) => {
+  for (let i = 0; i < steps; i++) {
+    await Promise.resolve()
+  }
+}
 
 describe('EditorStore', () => {
   beforeEach(() => {
@@ -713,6 +719,98 @@ describe('EditorStore', () => {
     })
   })
 
+  describe('document switch lock', () => {
+    const createDoc = (id: string, content: string): EditorDocument => ({
+      id,
+      name: id,
+      type: 'lesson',
+      content,
+      blocks: [{ id: `${id}-block`, type: 'paragraph', content, order: 0 }],
+      isDirty: false,
+      createdAt: new Date(),
+    })
+
+    beforeEach(() => {
+      useEditorStore.setState({
+        documents: [createDoc('doc-1', 'Doc 1'), createDoc('doc-2', 'Doc 2'), createDoc('doc-3', 'Doc 3')],
+        activeDocId: 'doc-1',
+        blocks: [{ id: 'doc-1-block', type: 'paragraph', content: 'Doc 1', order: 0 }],
+        markdown: 'Doc 1',
+        pendingDiffsByDoc: new Map([['doc-1', []], ['doc-2', []], ['doc-3', []]]),
+      })
+    })
+
+    it('queues concurrent switches and releases the lock', async () => {
+      useEditorStore.getState().switchDocument('doc-2')
+      useEditorStore.getState().switchDocument('doc-3')
+
+      const midState = useEditorStore.getState()
+      expect(midState.isDocumentSwitchLocked).toBe(true)
+      expect(midState.activeDocId).toBe('doc-2')
+
+      await flushMicrotasks()
+
+      const finalState = useEditorStore.getState()
+      expect(finalState.isDocumentSwitchLocked).toBe(false)
+      expect(finalState.activeDocId).toBe('doc-3')
+    })
+
+    it('serializes remove operations behind a switch', async () => {
+      useEditorStore.getState().switchDocument('doc-2')
+      useEditorStore.getState().removeDocument('doc-2')
+
+      const midState = useEditorStore.getState()
+      expect(midState.documents).toHaveLength(3)
+      expect(midState.activeDocId).toBe('doc-2')
+
+      await flushMicrotasks(4)
+
+      const finalState = useEditorStore.getState()
+      expect(finalState.documents).toHaveLength(2)
+      expect(finalState.activeDocId).toBe('doc-1')
+    })
+
+    it('releases the lock after the timeout', async () => {
+      jest.useFakeTimers()
+      try {
+        useEditorStore.getState().withDocumentSwitchLock(() => new Promise<void>(() => {}))
+        useEditorStore.getState().switchDocument('doc-2')
+
+        expect(useEditorStore.getState().isDocumentSwitchLocked).toBe(true)
+
+        jest.advanceTimersByTime(DOCUMENT_SWITCH_LOCK_TIMEOUT_MS + 50)
+        await flushMicrotasks(4)
+
+        const finalState = useEditorStore.getState()
+        expect(finalState.isDocumentSwitchLocked).toBe(false)
+        expect(finalState.activeDocId).toBe('doc-2')
+      } finally {
+        jest.useRealTimers()
+      }
+    })
+
+    it('releases the lock when the operation throws', async () => {
+      await useEditorStore.getState().withDocumentSwitchLock(() => {
+        throw new Error('boom')
+      })
+
+      expect(useEditorStore.getState().isDocumentSwitchLocked).toBe(false)
+    })
+
+    it('clears the lock timer on reset', () => {
+      jest.useFakeTimers()
+      try {
+        useEditorStore.getState().withDocumentSwitchLock(() => new Promise<void>(() => {}))
+        expect(useEditorStore.getState().isDocumentSwitchLocked).toBe(true)
+
+        useEditorStore.getState().reset()
+        expect(useEditorStore.getState().isDocumentSwitchLocked).toBe(false)
+      } finally {
+        jest.useRealTimers()
+      }
+    })
+  })
+
   describe('markDocumentsClean', () => {
     beforeEach(() => {
       const baseDoc: EditorDocument = {
@@ -850,6 +948,126 @@ describe('EditorStore', () => {
       expect(state.lessonId).toBeNull()
       expect(state.blocks).toEqual([])
       expect(state.chatMessages).toEqual([])
+    })
+  })
+
+  describe('pendingDiffs cleanup and isolation', () => {
+    const createDoc = (id: string, content: string): EditorDocument => ({
+      id,
+      name: id,
+      type: 'lesson',
+      content,
+      blocks: [{ id: `${id}-block`, type: 'paragraph', content, order: 0 }],
+      isDirty: false,
+      createdAt: new Date(),
+    })
+
+    beforeEach(() => {
+      const doc1 = createDoc('doc-1', 'Doc 1')
+      const doc2 = createDoc('doc-2', 'Doc 2')
+      const doc3 = createDoc('doc-3', 'Doc 3')
+      useEditorStore.setState({
+        documents: [doc1, doc2, doc3],
+        activeDocId: 'doc-1',
+        blocks: doc1.blocks,
+        markdown: doc1.content,
+        pendingDiffsByDoc: new Map([
+          ['doc-1', [{ id: 'd1', blockId: 'doc-1-block', action: 'update', oldContent: 'Doc 1', newContent: 'Doc 1 updated', reason: 'test' }]],
+          ['doc-2', [{ id: 'd2', blockId: 'doc-2-block', action: 'update', oldContent: 'Doc 2', newContent: 'Doc 2 updated', reason: 'test' }]],
+          ['doc-3', []],
+        ]),
+        pendingDiffs: [{ id: 'd1', blockId: 'doc-1-block', action: 'update', oldContent: 'Doc 1', newContent: 'Doc 1 updated', reason: 'test' }],
+      })
+    })
+
+    it('cleans up pendingDiffsByDoc when document is removed', async () => {
+      useEditorStore.getState().removeDocument('doc-2')
+      await flushMicrotasks()
+
+      const state = useEditorStore.getState()
+      expect(state.pendingDiffsByDoc.has('doc-2')).toBe(false)
+      expect(state.pendingDiffsByDoc.has('doc-1')).toBe(true)
+      expect(state.pendingDiffsByDoc.has('doc-3')).toBe(true)
+    })
+
+    it('syncs pendingDiffs back to pendingDiffsByDoc when applying a diff', () => {
+      useEditorStore.getState().applyDiff('d1')
+
+      const state = useEditorStore.getState()
+      expect(state.pendingDiffs).toHaveLength(0)
+      expect(state.pendingDiffsByDoc.get('doc-1')).toHaveLength(0)
+    })
+
+    it('syncs pendingDiffs back to pendingDiffsByDoc when rejecting a diff', () => {
+      useEditorStore.getState().rejectDiff('d1')
+
+      const state = useEditorStore.getState()
+      expect(state.pendingDiffs).toHaveLength(0)
+      expect(state.pendingDiffsByDoc.get('doc-1')).toHaveLength(0)
+    })
+
+    it('syncs pendingDiffs back to pendingDiffsByDoc when applying all diffs', () => {
+      useEditorStore.getState().setPendingDiffs([
+        { id: 'd1', blockId: 'doc-1-block', action: 'update', oldContent: 'Doc 1', newContent: 'Doc 1 updated', reason: 'test' },
+        { id: 'd1b', blockId: 'doc-1-block', action: 'update', oldContent: 'Doc 1 updated', newContent: 'Doc 1 final', reason: 'test' },
+      ])
+      useEditorStore.getState().applyAllDiffs()
+
+      const state = useEditorStore.getState()
+      expect(state.pendingDiffs).toHaveLength(0)
+      expect(state.pendingDiffsByDoc.get('doc-1')).toHaveLength(0)
+    })
+
+    it('syncs pendingDiffs back to pendingDiffsByDoc when rejecting all diffs', () => {
+      useEditorStore.getState().setPendingDiffs([
+        { id: 'd1', blockId: 'doc-1-block', action: 'update', oldContent: 'Doc 1', newContent: 'Doc 1 updated', reason: 'test' },
+        { id: 'd1b', blockId: 'doc-1-block', action: 'update', oldContent: 'Doc 1 updated', newContent: 'Doc 1 final', reason: 'test' },
+      ])
+      useEditorStore.getState().rejectAllDiffs()
+
+      const state = useEditorStore.getState()
+      expect(state.pendingDiffs).toHaveLength(0)
+      expect(state.pendingDiffsByDoc.get('doc-1')).toHaveLength(0)
+    })
+
+    it('isolates pendingDiffs per document during concurrent editing', async () => {
+      useEditorStore.getState().switchDocument('doc-2')
+      await flushMicrotasks()
+
+      const state = useEditorStore.getState()
+      expect(state.activeDocId).toBe('doc-2')
+      expect(state.pendingDiffs).toHaveLength(1)
+      expect(state.pendingDiffs[0].id).toBe('d2')
+      expect(state.pendingDiffsByDoc.get('doc-1')).toHaveLength(1)
+      expect(state.pendingDiffsByDoc.get('doc-2')).toHaveLength(1)
+    })
+
+    it('prevents memory leak by cleaning up pendingDiffsByDoc on document removal', async () => {
+      const initialSize = useEditorStore.getState().pendingDiffsByDoc.size
+      expect(initialSize).toBe(3)
+
+      useEditorStore.getState().removeDocument('doc-2')
+      await flushMicrotasks()
+      expect(useEditorStore.getState().pendingDiffsByDoc.size).toBe(2)
+
+      useEditorStore.getState().removeDocument('doc-3')
+      await flushMicrotasks()
+      expect(useEditorStore.getState().pendingDiffsByDoc.size).toBe(1)
+    })
+
+    it('maintains pendingDiffsByDoc integrity during multiple document operations', async () => {
+      const doc4 = createDoc('doc-4', 'Doc 4')
+      useEditorStore.getState().addDocument(doc4)
+
+      const state1 = useEditorStore.getState()
+      expect(state1.pendingDiffsByDoc.has('doc-4')).toBe(true)
+      expect(state1.pendingDiffsByDoc.get('doc-4')).toHaveLength(0)
+
+      useEditorStore.getState().removeDocument('doc-4')
+      await flushMicrotasks()
+
+      const state2 = useEditorStore.getState()
+      expect(state2.pendingDiffsByDoc.has('doc-4')).toBe(false)
     })
   })
 })

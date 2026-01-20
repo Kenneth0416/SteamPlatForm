@@ -40,9 +40,9 @@ jest.mock('@/hooks/use-toast', () => {
 })
 
 jest.mock('@/lib/autoSaveQueue', () => ({
-  enqueueSave: jest.fn(),
-  dequeueSave: jest.fn(),
-  getQueue: jest.fn(() => []),
+  enqueueSave: jest.fn().mockResolvedValue(null),
+  dequeueSave: jest.fn().mockResolvedValue(undefined),
+  getQueue: jest.fn().mockResolvedValue([]),
   setupOnlineListener: jest.fn(),
   cleanupOnlineListener: jest.fn(),
 }))
@@ -81,12 +81,17 @@ const TestComponent = (props: Partial<Parameters<typeof useAutoSave>[0]>) => {
   return null
 }
 
+const DefaultEnabledComponent = (props: Omit<Parameters<typeof useAutoSave>[0], 'enabled'>) => {
+  useAutoSave(props)
+  return null
+}
+
 describe('useAutoSave', () => {
   beforeEach(() => {
     jest.useFakeTimers()
     jest.resetAllMocks()
     useEditorStore.getState().reset()
-    ;(getQueue as jest.Mock).mockReturnValue([])
+    ;(getQueue as jest.Mock).mockResolvedValue([])
   })
 
   afterEach(() => {
@@ -119,7 +124,28 @@ describe('useAutoSave', () => {
 
     await advanceTimers(5000)
 
-    expect(saveLesson).toHaveBeenCalledWith('Changed lesson content', requirements, 'lesson-1')
+    expect(updateDocument).toHaveBeenCalledWith('doc-1', { content: 'Draft' })
+  })
+
+  it('uses the default enabled flag when omitted', async () => {
+    useEditorStore.setState({
+      documents: [createDoc('doc-1', 'Draft')],
+      activeDocId: 'doc-1',
+    })
+    ;(saveLesson as jest.Mock).mockResolvedValue({ id: 'lesson-1' })
+    ;(updateDocument as jest.Mock).mockResolvedValue({ id: 'doc-1' })
+
+    render(
+      <DefaultEnabledComponent
+        currentLesson="Changed lesson content"
+        currentRequirements={requirements}
+        currentLessonId="lesson-1"
+        streamingDocId={null}
+      />,
+    )
+
+    await advanceTimers(5000)
+
     expect(updateDocument).toHaveBeenCalledWith('doc-1', { content: 'Draft' })
   })
 
@@ -208,6 +234,21 @@ describe('useAutoSave', () => {
     )
     expect(toastMock).toHaveBeenCalledWith(
       expect.objectContaining({ variant: 'destructive' }),
+    )
+  })
+
+  it('queues failed documents with an unsaved lesson id fallback', async () => {
+    useEditorStore.setState({ documents: [createDoc('doc-1', 'Dirty content')] })
+    ;(updateDocument as jest.Mock).mockRejectedValue(new Error('network'))
+
+    render(<TestComponent currentLessonId={undefined} />)
+    await advanceTimers(5000)
+
+    expect(enqueueSave).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'document',
+        lessonId: 'unsaved',
+      }),
     )
   })
 
@@ -301,7 +342,7 @@ describe('useAutoSave', () => {
         timestamp: Date.now(),
       },
     ]
-    ;(getQueue as jest.Mock).mockReturnValueOnce(queuedItems).mockReturnValue([])
+    ;(getQueue as jest.Mock).mockResolvedValueOnce(queuedItems).mockResolvedValue([])
 
     render(<TestComponent enabled={false} />)
     await act(async () => {
@@ -329,7 +370,7 @@ describe('useAutoSave', () => {
         timestamp: Date.now(),
       },
     ]
-    ;(getQueue as jest.Mock).mockReturnValueOnce(queuedItems).mockReturnValue([])
+    ;(getQueue as jest.Mock).mockResolvedValueOnce(queuedItems).mockResolvedValue([])
     ;(saveLesson as jest.Mock).mockResolvedValue({ id: 'queued-lesson' })
     ;(updateDocument as jest.Mock).mockResolvedValue({ id: 'doc-queued' })
 
@@ -358,7 +399,7 @@ describe('useAutoSave', () => {
         timestamp: Date.now(),
       },
     ]
-    ;(getQueue as jest.Mock).mockReturnValueOnce(queuedItems).mockReturnValue([])
+    ;(getQueue as jest.Mock).mockResolvedValueOnce(queuedItems).mockResolvedValue([])
 
     render(<TestComponent streamingDocId="streaming-doc" enabled={false} />)
     await act(async () => {
@@ -378,7 +419,7 @@ describe('useAutoSave', () => {
         timestamp: Date.now(),
       },
     ]
-    ;(getQueue as jest.Mock).mockReturnValueOnce(queuedItems).mockReturnValue([])
+    ;(getQueue as jest.Mock).mockResolvedValueOnce(queuedItems).mockResolvedValue([])
     ;(saveLesson as jest.Mock).mockResolvedValue({ id: 'from-result' })
 
     render(<TestComponent enabled={false} />)
@@ -388,6 +429,36 @@ describe('useAutoSave', () => {
 
     expect(saveLesson).toHaveBeenCalledWith('Queued lesson', requirements, '')
     expect(dequeueSave).toHaveBeenCalledWith('q-lesson')
+  })
+
+  it('reuses queued lesson ids for later failures', async () => {
+    useEditorStore.setState({ documents: [createDoc('doc-1', 'Dirty content')] })
+    const queuedItems = [
+      {
+        id: 'q-lesson',
+        type: 'lesson' as const,
+        lessonId: '',
+        payload: { markdown: 'Queued lesson', requirements },
+        timestamp: Date.now(),
+      },
+    ]
+    ;(getQueue as jest.Mock).mockResolvedValueOnce(queuedItems).mockResolvedValue([])
+    ;(saveLesson as jest.Mock).mockResolvedValue({ id: 'from-result' })
+    ;(updateDocument as jest.Mock).mockRejectedValue(new Error('network'))
+
+    render(<TestComponent currentLessonId={undefined} enabled={true} />)
+    await act(async () => {
+      await Promise.resolve()
+    })
+
+    await advanceTimers(5000)
+
+    expect(enqueueSave).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'document',
+        lessonId: 'from-result',
+      }),
+    )
   })
 
   it('skips invalid queued document payloads', async () => {
@@ -400,7 +471,7 @@ describe('useAutoSave', () => {
         timestamp: Date.now(),
       },
     ]
-    ;(getQueue as jest.Mock).mockReturnValueOnce(queuedItems).mockReturnValue([])
+    ;(getQueue as jest.Mock).mockResolvedValueOnce(queuedItems).mockResolvedValue([])
 
     render(<TestComponent enabled={false} />)
     await act(async () => {
@@ -428,7 +499,7 @@ describe('useAutoSave', () => {
         timestamp: Date.now(),
       },
     ]
-    ;(getQueue as jest.Mock).mockReturnValueOnce(queuedItems).mockReturnValue([])
+    ;(getQueue as jest.Mock).mockResolvedValueOnce(queuedItems).mockResolvedValue([])
     ;(updateDocument as jest.Mock).mockResolvedValue({ id: 'doc-queued' })
 
     render(<TestComponent enabled={false} />)

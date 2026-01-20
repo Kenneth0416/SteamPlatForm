@@ -77,8 +77,8 @@ const NO_PROGRESS_THRESHOLD = 10
  * Detect if the agent is stuck in a loop
  * Stuck conditions:
  * 1. list_blocks called ≥3 times consecutively
- * 2. read_block/read_blocks with same blockIds ≥3 times consecutively
- * 3. ≥10 calls without any edit_block/edit_blocks/add_block/delete_block
+ * 2. read_blocks with same blockIds ≥3 times consecutively
+ * 3. ≥10 calls without any edit_blocks/add_block/delete_block
  */
 export function detectStuck(trace: ToolTrace): StuckResult {
   const entries = trace.getRecent()
@@ -94,7 +94,7 @@ export function detectStuck(trace: ToolTrace): StuckResult {
   }
 
   // Check for consecutive read with same args
-  const readTools = ['read_block', 'read_blocks']
+  const readTools = ['read_blocks']
   const allRead = recentN.every(e => readTools.includes(e.name) && e.status === 'success')
   if (allRead) {
     const argsStrings = recentN.map(e => JSON.stringify(e.args))
@@ -107,7 +107,7 @@ export function detectStuck(trace: ToolTrace): StuckResult {
   // Check for no progress (no edit/add/delete in last N calls)
   if (entries.length >= NO_PROGRESS_THRESHOLD) {
     const recentCalls = entries.slice(-NO_PROGRESS_THRESHOLD)
-    const mutationTools = ['edit_block', 'edit_blocks', 'add_block', 'delete_block']
+    const mutationTools = ['edit_blocks', 'add_block', 'delete_block']
     const hasMutation = recentCalls.some(e => mutationTools.includes(e.name) && e.status === 'success')
     if (!hasMutation) {
       return { isStuck: true, reason: `${NO_PROGRESS_THRESHOLD} calls without any edit/add/delete` }

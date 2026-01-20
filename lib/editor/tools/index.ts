@@ -33,44 +33,6 @@ export function createListBlocksTool(ctx: ToolContext) {
   })
 }
 
-export function createReadBlockTool(ctx: ToolContext) {
-  return new DynamicStructuredTool({
-    name: 'read_block',
-    description: 'Read ONE block. Use read_blocks instead for 2+ blocks.',
-    schema: z.object({
-      blockId: z.string().describe('The ID of the block to read'),
-    }),
-    func: async ({ blockId }) => {
-      const result = ctx.blockIndex.getWithContext(blockId)
-      if (!result.block) {
-        return `Error: Block "${blockId}" not found`
-      }
-
-      ctx.guard.markBlockRead(blockId)
-      // Also mark context blocks as read
-      const ctxIds = [
-        ...result.before.map(b => b.id),
-        ...result.after.map(b => b.id),
-      ]
-      ctx.guard.markBlocksRead(ctxIds)
-
-      // Use effective content (with pending overlay)
-      const content = ctx.blockIndex.getEffectiveContent(blockId, ctx.pendingDiffs) ?? result.block.content
-
-      let output = `Block ${blockId} (${result.block.type}):\n${content}`
-
-      if (result.before.length > 0) {
-        output = `Context before:\n${result.before.map(b => `[${b.id}] ${b.content.slice(0, 30)}...`).join('\n')}\n\n${output}`
-      }
-      if (result.after.length > 0) {
-        output += `\n\nContext after:\n${result.after.map(b => `[${b.id}] ${b.content.slice(0, 30)}...`).join('\n')}`
-      }
-
-      return output
-    },
-  })
-}
-
 export function createReadBlocksTool(ctx: ToolContext) {
   return new DynamicStructuredTool({
     name: 'read_blocks',
@@ -113,44 +75,6 @@ export function createReadBlocksTool(ctx: ToolContext) {
       })
 
       return JSON.stringify({ blocks }, null, 2)
-    },
-  })
-}
-
-export function createEditBlockTool(ctx: ToolContext) {
-  return new DynamicStructuredTool({
-    name: 'edit_block',
-    description: 'Edit ONE block. Use edit_blocks instead for 2+ edits.',
-    schema: z.object({
-      blockId: z.string().describe('The ID of the block to edit'),
-      newContent: z.string().describe('The new content for the block'),
-      reason: z.string().describe('Brief reason for this change'),
-    }),
-    func: async ({ blockId, newContent, reason }) => {
-      const check = ctx.guard.canEdit(blockId)
-      if (!check.allowed) {
-        return `Error: ${check.error}`
-      }
-
-      // Use effective content for oldContent (with pending overlay)
-      const oldContent = ctx.blockIndex.getEffectiveContent(blockId, ctx.pendingDiffs)
-      if (oldContent === null) {
-        return `Error: Block "${blockId}" not found or deleted`
-      }
-
-      const diff: PendingDiff = {
-        id: generateDiffId(),
-        blockId,
-        action: 'update',
-        oldContent,
-        newContent,
-        reason,
-      }
-
-      ctx.pendingDiffs.push(diff)
-      ctx.onDiffCreated?.(diff)
-
-      return `Created pending edit for block ${blockId}. Diff ID: ${diff.id}\nOld: ${oldContent.slice(0, 50)}...\nNew: ${newContent.slice(0, 50)}...\nReason: ${reason}\n\nUser must confirm this change.`
     },
   })
 }
@@ -284,9 +208,7 @@ export function createDeleteBlockTool(ctx: ToolContext) {
 export function createEditorTools(ctx: ToolContext) {
   return [
     createListBlocksTool(ctx),
-    createReadBlockTool(ctx),
     createReadBlocksTool(ctx),
-    createEditBlockTool(ctx),
     createEditBlocksTool(ctx),
     createAddBlockTool(ctx),
     createDeleteBlockTool(ctx),

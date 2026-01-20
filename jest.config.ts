@@ -29,6 +29,9 @@ const config: Config = {
     if (argv.match(/testPathPattern=.*vditor/i)) {
       return ['lib/vditor-assets.ts']
     }
+    if (argv.match(/autoSaveQueue/i)) {
+      return ['lib/autoSaveQueue.ts', 'hooks/useAutoSave.ts']
+    }
     if (argv.match(/export-pdf-generator/i)) {
       return ['lib/export/pdf/**/*.{ts,tsx}']
     }
@@ -40,6 +43,9 @@ const config: Config = {
     }
     if (argv.match(/redundant-redirects/i)) {
       return ['components/layout/header.tsx']
+    }
+    if (argv.match(/editorStore/i)) {
+      return ['stores/editorStore.ts']
     }
     if (argv.match(/layout-guard/i)) {
       return ['app/layout.tsx', 'app/auth/layout.tsx']

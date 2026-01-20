@@ -1,20 +1,10 @@
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
-import { auth } from "@/lib/auth"
-
-const requireAuth = async () => {
-  const session = await auth()
-  if (!session?.user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  }
-  return null
-}
+import { requireAdmin } from "@/lib/auth-helpers"
 
 export async function PUT(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const unauthorized = await requireAuth()
-  if (unauthorized) {
-    return unauthorized
-  }
+  const authError = await requireAdmin()
+  if (authError) return authError
 
   try {
     const { id } = await params
@@ -41,10 +31,8 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
 }
 
 export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const unauthorized = await requireAuth()
-  if (unauthorized) {
-    return unauthorized
-  }
+  const authError = await requireAdmin()
+  if (authError) return authError
 
   try {
     const { id } = await params

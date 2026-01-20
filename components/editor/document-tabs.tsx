@@ -21,7 +21,7 @@ interface DocumentTabsProps {
 }
 
 export function DocumentTabs({ onAddDocument }: DocumentTabsProps) {
-  const { documents, activeDocId, switchDocument, removeDocument } = useEditorStore()
+  const { documents, activeDocId, switchDocument, removeDocument, isDocumentSwitchLocked } = useEditorStore()
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null)
 
   const handleDelete = async () => {
@@ -51,8 +51,9 @@ export function DocumentTabs({ onAddDocument }: DocumentTabsProps) {
                 <button
                   key={doc.id}
                   onClick={() => switchDocument(doc.id)}
+                  disabled={isDocumentSwitchLocked}
                   className={cn(
-                    'flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-all whitespace-nowrap shrink-0',
+                    'flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-all whitespace-nowrap shrink-0 disabled:cursor-not-allowed disabled:opacity-60',
                     activeDocId === doc.id
                       ? 'bg-background shadow-sm'
                       : 'text-muted-foreground hover:text-foreground hover:bg-background/50'
