@@ -253,22 +253,92 @@ graph TB
     style ApplyAgent fill:#e8f5e9
 ```
 
-#### 2. LangChain LCEL Pipeline 工作流
+#### 2. Chat Optimization Agent (chatWithLesson) 核心流程
+
+这是系统的关键创新：通过智能标记系统（[NEEDS_CHANGE] / [NO_CHANGE]）将对话式交互与自动化编辑无缝连接。
 
 ```mermaid
-flowchart LR
-    Input[输入数据] --> PromptTemplate[Prompt Template<br/>注入变量]
-    PromptTemplate --> Model[LLM Model<br/>DeepSeek API]
-    Model --> OutputParser[Output Parser<br/>格式化输出]
-    OutputParser --> Result[结果返回]
+graph TB
+    Start([用户在聊天框输入优化需求]) --> Input[构建输入]
 
-    Model -.->|Stream 模式| StreamChunk[流式输出 Chunks]
-    StreamChunk -.-> Result
+    Input --> PrepareContext[准备上下文]
+    PrepareContext --> CurrentLesson[当前课程内容<br/>currentLesson]
+    PrepareContext --> UserMsg[用户消息<br/>userMessage]
 
-    style PromptTemplate fill:#bbdefb
-    style Model fill:#c5e1a5
-    style OutputParser fill:#ffccbc
+    CurrentLesson --> ChatAgent[Chat Agent<br/>chatWithLesson/Stream]
+    UserMsg --> ChatAgent
+
+    ChatAgent --> Prompt[Chat Prompt Template<br/>系统角色 + 用户需求]
+
+    Prompt --> SystemRole{System Prompt 定义三个角色}
+    SystemRole --> Role1[1. 回答课程相关问题]
+    SystemRole --> Role2[2. 提供改进建议]
+    SystemRole --> Role3[3. 描述具体修改方案]
+
+    Role1 --> LLM[DeepSeek LLM<br/>temperature: 0.7]
+    Role2 --> LLM
+    Role3 --> LLM
+
+    LLM --> Analysis[LLM 深度分析]
+    Analysis --> Decision{判断响应类型}
+
+    Decision -->|纯信息查询| NoChange[添加标记<br/>[NO_CHANGE]]
+    Decision -->|包含修改建议| NeedsChange[添加标记<br/>[NEEDS_CHANGE]]
+
+    NoChange --> Response1[生成对话式回复<br/>不触发编辑]
+    NeedsChange --> Response2[生成优化建议<br/>描述修改内容]
+
+    Response1 --> Stream{流式模式?}
+    Response2 --> Stream
+
+    Stream -->|是| StreamChunks[逐块返回内容<br/>实时显示]
+    Stream -->|否| FullResponse[返回完整响应]
+
+    StreamChunks --> DetectTag[检测标记]
+    FullResponse --> DetectTag
+
+    DetectTag --> CheckTag{检测到<br/>[NEEDS_CHANGE]?}
+
+    CheckTag -->|否| ShowResponse[显示对话回复]
+    CheckTag -->|是| ShowButton[显示 Apply Change 按钮]
+
+    ShowButton --> UserClick{用户点击<br/>Apply?}
+    UserClick -->|是| TriggerApply[触发 applyChangeWithLLM]
+    UserClick -->|否| End1([保持建议状态])
+
+    TriggerApply --> ApplyAgent[Apply Change Agent<br/>执行 JSON 编辑操作]
+    ApplyAgent --> UpdateDB[(更新数据库)]
+    UpdateDB --> End2([课程已更新])
+
+    ShowResponse --> End3([对话结束])
+
+    style ChatAgent fill:#fff4e1
+    style LLM fill:#c5e1a5
+    style NeedsChange fill:#ffcdd2
+    style NoChange fill:#b3e5fc
+    style ShowButton fill:#a5d6a7
+    style ApplyAgent fill:#e8f5e9
 ```
+
+**关键创新点：**
+
+1. **智能标记系统**：
+   - `[NEEDS_CHANGE]` - LLM 判断响应包含可执行的修改建议
+   - `[NO_CHANGE]` - 纯信息查询或讨论，无需编辑
+
+2. **三重角色定位**：
+   - 问答助手：解释课程内容
+   - 优化顾问：提供改进建议
+   - 编辑指导：描述具体修改方案
+
+3. **无缝衔接**：
+   - 对话建议 → 自动化编辑的桥梁
+   - 避免用户手动复制粘贴
+   - 保持编辑历史可追溯
+
+4. **双模式支持**：
+   - `chatWithLesson()` - 完整响应模式
+   - `chatWithLessonStream()` - 流式实时显示
 
 #### 3. Apply Change Agent 编辑操作流程
 

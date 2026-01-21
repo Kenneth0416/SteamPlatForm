@@ -253,22 +253,92 @@ graph TB
     style ApplyAgent fill:#e8f5e9
 ```
 
-**2. LangChain LCEL Pipeline Workflow**
+**2. Chat Optimization Agent (chatWithLesson) Core Workflow**
+
+This is the key innovation: seamlessly connecting conversational interaction with automated editing through an intelligent tagging system ([NEEDS_CHANGE] / [NO_CHANGE]).
 
 ```mermaid
-flowchart LR
-    Input[Input Data] --> PromptTemplate[Prompt Template<br/>Inject Variables]
-    PromptTemplate --> Model[LLM Model<br/>DeepSeek API]
-    Model --> OutputParser[Output Parser<br/>Format Output]
-    OutputParser --> Result[Return Result]
+graph TB
+    Start([User inputs optimization request in chat]) --> Input[Build Input]
 
-    Model -.->|Stream Mode| StreamChunk[Stream Output Chunks]
-    StreamChunk -.-> Result
+    Input --> PrepareContext[Prepare Context]
+    PrepareContext --> CurrentLesson[Current Lesson Content<br/>currentLesson]
+    PrepareContext --> UserMsg[User Message<br/>userMessage]
 
-    style PromptTemplate fill:#bbdefb
-    style Model fill:#c5e1a5
-    style OutputParser fill:#ffccbc
+    CurrentLesson --> ChatAgent[Chat Agent<br/>chatWithLesson/Stream]
+    UserMsg --> ChatAgent
+
+    ChatAgent --> Prompt[Chat Prompt Template<br/>System Role + User Request]
+
+    Prompt --> SystemRole{System Prompt defines 3 roles}
+    SystemRole --> Role1[1. Answer lesson questions]
+    SystemRole --> Role2[2. Provide improvement suggestions]
+    SystemRole --> Role3[3. Describe specific modifications]
+
+    Role1 --> LLM[DeepSeek LLM<br/>temperature: 0.7]
+    Role2 --> LLM
+    Role3 --> LLM
+
+    LLM --> Analysis[LLM Deep Analysis]
+    Analysis --> Decision{Determine response type}
+
+    Decision -->|Pure info query| NoChange[Add tag<br/>[NO_CHANGE]]
+    Decision -->|Contains modification| NeedsChange[Add tag<br/>[NEEDS_CHANGE]]
+
+    NoChange --> Response1[Generate conversational reply<br/>No edit triggered]
+    NeedsChange --> Response2[Generate optimization suggestion<br/>Describe modifications]
+
+    Response1 --> Stream{Streaming mode?}
+    Response2 --> Stream
+
+    Stream -->|Yes| StreamChunks[Return chunks<br/>Real-time display]
+    Stream -->|No| FullResponse[Return full response]
+
+    StreamChunks --> DetectTag[Detect Tag]
+    FullResponse --> DetectTag
+
+    DetectTag --> CheckTag{Detected<br/>[NEEDS_CHANGE]?}
+
+    CheckTag -->|No| ShowResponse[Show chat reply]
+    CheckTag -->|Yes| ShowButton[Show Apply Change button]
+
+    ShowButton --> UserClick{User clicks<br/>Apply?}
+    UserClick -->|Yes| TriggerApply[Trigger applyChangeWithLLM]
+    UserClick -->|No| End1([Keep suggestion state])
+
+    TriggerApply --> ApplyAgent[Apply Change Agent<br/>Execute JSON edit operations]
+    ApplyAgent --> UpdateDB[(Update Database)]
+    UpdateDB --> End2([Lesson Updated])
+
+    ShowResponse --> End3([Chat Ended])
+
+    style ChatAgent fill:#fff4e1
+    style LLM fill:#c5e1a5
+    style NeedsChange fill:#ffcdd2
+    style NoChange fill:#b3e5fc
+    style ShowButton fill:#a5d6a7
+    style ApplyAgent fill:#e8f5e9
 ```
+
+**Key Innovation Points:**
+
+1. **Intelligent Tagging System**:
+   - `[NEEDS_CHANGE]` - LLM determines response contains executable modification suggestions
+   - `[NO_CHANGE]` - Pure information query or discussion, no editing needed
+
+2. **Triple Role Positioning**:
+   - Q&A Assistant: Explain lesson content
+   - Optimization Advisor: Provide improvement suggestions
+   - Edit Guidance: Describe specific modification plans
+
+3. **Seamless Integration**:
+   - Bridge between conversational suggestions → automated editing
+   - Eliminates manual copy-paste by users
+   - Maintains traceable edit history
+
+4. **Dual Mode Support**:
+   - `chatWithLesson()` - Full response mode
+   - `chatWithLessonStream()` - Streaming real-time display
 
 **3. Apply Change Agent Edit Operation Flow**
 
