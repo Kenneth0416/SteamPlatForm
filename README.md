@@ -253,92 +253,180 @@ graph TB
     style ApplyAgent fill:#e8f5e9
 ```
 
-#### 2. Chat Optimization Agent (chatWithLesson) 核心流程
+#### 2. Editor Agent - LLM-Driven Document Editor（核心创新）
 
-这是系统的关键创新：通过智能标记系统（[NEEDS_CHANGE] / [NO_CHANGE]）将对话式交互与自动化编辑无缝连接。
+这是系统真正的核心：基于 LangChain Tool Calling 的智能文档编辑 Agent，通过自然语言指令实现精确的文档操作。
+
+##### 架构概览
 
 ```mermaid
 graph TB
-    Start([用户在聊天框输入优化需求]) --> Input[构建输入]
+    User[用户自然语言指令] --> AgentLoop[Editor Agent Loop<br/>最多 30 轮]
 
-    Input --> PrepareContext[准备上下文]
-    PrepareContext --> CurrentLesson[当前课程内容<br/>currentLesson]
-    PrepareContext --> UserMsg[用户消息<br/>userMessage]
+    AgentLoop --> SystemPrompt[System Prompt<br/>定义效率规则和工作流程]
+    SystemPrompt --> LLM[DeepSeek LLM<br/>temperature: 0.2]
 
-    CurrentLesson --> ChatAgent[Chat Agent<br/>chatWithLesson/Stream]
-    UserMsg --> ChatAgent
+    LLM --> Decision{是否需要<br/>调用工具?}
 
-    ChatAgent --> Prompt[Chat Prompt Template<br/>系统角色 + 用户需求]
+    Decision -->|是| ToolDispatch[工具分发器]
+    Decision -->|否| Response[返回最终回复]
 
-    Prompt --> SystemRole{System Prompt 定义三个角色}
-    SystemRole --> Role1[1. 回答课程相关问题]
-    SystemRole --> Role2[2. 提供改进建议]
-    SystemRole --> Role3[3. 描述具体修改方案]
+    ToolDispatch --> Tools[五大核心工具]
 
-    Role1 --> LLM[DeepSeek LLM<br/>temperature: 0.7]
-    Role2 --> LLM
-    Role3 --> LLM
+    subgraph Tools[五大核心工具]
+        ListBlocks[list_blocks<br/>列出文档结构]
+        ReadBlocks[read_blocks<br/>批量读取内容]
+        EditBlocks[edit_blocks<br/>批量编辑内容]
+        AddBlock[add_block<br/>添加新块]
+        DeleteBlock[delete_block<br/>删除块]
+    end
 
-    LLM --> Analysis[LLM 深度分析]
-    Analysis --> Decision{判断响应类型}
+    ListBlocks --> BlockIndex[BlockIndexService<br/>文档索引]
+    ReadBlocks --> BlockIndex
+    EditBlocks --> PendingDiffs[Pending Diffs<br/>待确认变更队列]
+    AddBlock --> PendingDiffs
+    DeleteBlock --> PendingDiffs
 
-    Decision -->|纯信息查询| NoChange[添加标记<br/>[NO_CHANGE]]
-    Decision -->|包含修改建议| NeedsChange[添加标记<br/>[NEEDS_CHANGE]]
+    BlockIndex --> Guard[ReadWriteGuard<br/>读写权限保护]
+    PendingDiffs --> Guard
 
-    NoChange --> Response1[生成对话式回复<br/>不触发编辑]
-    NeedsChange --> Response2[生成优化建议<br/>描述修改内容]
+    Guard --> ToolResult[工具执行结果]
+    ToolResult --> ToolTrace[ToolTrace<br/>调用历史追踪]
 
-    Response1 --> Stream{流式模式?}
-    Response2 --> Stream
+    ToolTrace --> StuckDetector{检测循环<br/>卡死?}
+    StuckDetector -->|正常| AgentLoop
+    StuckDetector -->|卡死| EarlyExit[提前退出]
 
-    Stream -->|是| StreamChunks[逐块返回内容<br/>实时显示]
-    Stream -->|否| FullResponse[返回完整响应]
+    PendingDiffs --> UserConfirm[用户确认变更]
+    UserConfirm --> ApplyToDb[(应用到数据库)]
 
-    StreamChunks --> DetectTag[检测标记]
-    FullResponse --> DetectTag
-
-    DetectTag --> CheckTag{检测到<br/>[NEEDS_CHANGE]?}
-
-    CheckTag -->|否| ShowResponse[显示对话回复]
-    CheckTag -->|是| ShowButton[显示 Apply Change 按钮]
-
-    ShowButton --> UserClick{用户点击<br/>Apply?}
-    UserClick -->|是| TriggerApply[触发 applyChangeWithLLM]
-    UserClick -->|否| End1([保持建议状态])
-
-    TriggerApply --> ApplyAgent[Apply Change Agent<br/>执行 JSON 编辑操作]
-    ApplyAgent --> UpdateDB[(更新数据库)]
-    UpdateDB --> End2([课程已更新])
-
-    ShowResponse --> End3([对话结束])
-
-    style ChatAgent fill:#fff4e1
     style LLM fill:#c5e1a5
-    style NeedsChange fill:#ffcdd2
-    style NoChange fill:#b3e5fc
-    style ShowButton fill:#a5d6a7
-    style ApplyAgent fill:#e8f5e9
+    style Tools fill:#e1f5ff
+    style PendingDiffs fill:#fff4e1
+    style Guard fill:#ffcdd2
+    style StuckDetector fill:#ce93d8
 ```
 
-**关键创新点：**
+##### 工作流程详解
 
-1. **智能标记系统**：
-   - `[NEEDS_CHANGE]` - LLM 判断响应包含可执行的修改建议
-   - `[NO_CHANGE]` - 纯信息查询或讨论，无需编辑
+```mermaid
+sequenceDiagram
+    participant U as 用户
+    participant A as Editor Agent
+    participant LLM as DeepSeek LLM
+    participant T as Tool System
+    participant D as Pending Diffs
+    participant DB as Database
 
-2. **三重角色定位**：
-   - 问答助手：解释课程内容
-   - 优化顾问：提供改进建议
-   - 编辑指导：描述具体修改方案
+    U->>A: "在第二节后添加小组讨论环节"
+    A->>LLM: System Prompt + 用户消息
 
-3. **无缝衔接**：
-   - 对话建议 → 自动化编辑的桥梁
-   - 避免用户手动复制粘贴
-   - 保持编辑历史可追溯
+    Note over LLM: 规划操作步骤<br/>list → read → edit
 
-4. **双模式支持**：
-   - `chatWithLesson()` - 完整响应模式
-   - `chatWithLessonStream()` - 流式实时显示
+    LLM->>T: tool_call: list_blocks()
+    T->>T: BlockIndexService.getBlockIndex()
+    T-->>LLM: 返回文档结构 + 预览
+
+    LLM->>T: tool_call: read_blocks([block_3, block_4])
+    T->>T: 批量读取指定块
+    T-->>LLM: 返回完整内容
+
+    Note over LLM: 分析内容<br/>生成编辑方案
+
+    LLM->>T: tool_call: add_block(afterBlockId: "block_3", ...)
+    T->>D: 创建 PendingDiff
+    D-->>T: diff_id: "diff-123"
+    T-->>LLM: "已创建待确认变更"
+
+    LLM-->>A: 最终回复（无更多 tool_calls）
+    A-->>U: "已添加小组讨论环节（待确认）"
+
+    U->>D: 点击"应用变更"
+    D->>DB: 执行 diff
+    DB-->>U: 更新成功
+```
+
+##### 五大核心工具
+
+| 工具 | 功能 | 批量支持 | 权限保护 |
+|------|------|---------|---------|
+| **list_blocks** | 列出文档结构和内容预览 | N/A | 标记为已读 |
+| **read_blocks** | 批量读取块内容（含上下文） | ✅ 最多 25 | ReadWriteGuard |
+| **edit_blocks** | 批量编辑块内容 | ✅ 最多 25 | 必须先读取 |
+| **add_block** | 在指定位置后添加新块 | 单个 | 内容非空校验 |
+| **delete_block** | 删除指定块 | 单个 | 必须先读取 |
+
+##### 关键创新机制
+
+**1. Pending Diffs 机制**
+
+所有编辑操作先生成 `PendingDiff` 对象，用户确认后才应用到数据库：
+- **安全性**：防止 LLM 误操作直接修改数据
+- **可追溯**：完整记录变更历史（EditHistory 表）
+- **可撤销**：用户可拒绝 AI 建议的变更
+
+```typescript
+interface PendingDiff {
+  id: string           // diff-timestamp-random
+  blockId: string      // 目标块 ID
+  action: 'update' | 'add' | 'delete'
+  oldContent: string   // 原内容
+  newContent: string   // 新内容
+  reason: string       // LLM 提供的修改原因
+}
+```
+
+**2. ReadWriteGuard（读写保护）**
+
+防止 LLM 未读先写的错误模式：
+- **规则**：编辑/删除前必须先调用 `read_blocks`
+- **检测**：`guard.canEdit(blockId)` 返回 `{allowed: false, error: "..."}`
+- **作用**：强制 Agent 理解内容后再修改
+
+**3. 效率规则（System Prompt 强制）**
+
+- 最多 3 步工作流：`list_blocks` → `read_blocks` → `edit_blocks`
+- 批量操作优先：一次调用处理多个块
+- 只读查询 2 步：`list_blocks` → 直接回答（跳过不必要的 read）
+
+**4. 防卡死机制（Stuck Detection）**
+
+检测三种循环模式：
+- 连续 3 次调用 `list_blocks`
+- 连续 3 次调用 `read_blocks` 且参数相同
+- 连续 10 次调用无任何编辑操作
+
+**触发机制**：
+```typescript
+detectStuck(toolTrace) → {
+  isStuck: true,
+  reason: "list_blocks called 3 times consecutively"
+}
+```
+
+**5. 多文档支持**
+
+额外两个工具用于多文档编辑：
+- `list_documents` - 列出所有打开的文档
+- `switch_document(docId)` - 切换活动文档
+- 切换后自动重置 BlockIndex 和 Guard
+
+##### 技术架构亮点
+
+1. **LangChain Tool Calling**：原生支持 OpenAI-style function calling
+2. **流式输出**：`runEditorAgentStream()` 实时返回工具调用和内容
+3. **上下文管理**：`BlockIndexService` 提供高效的块索引和搜索
+4. **状态追踪**：`ToolTrace` 环形缓冲区记录最近 30 次调用
+5. **错误恢复**：工具执行失败不中断循环，返回错误信息给 LLM 重试
+
+##### 实现文件
+
+- **lib/editor/agent.ts** - Agent 主循环和流式输出
+- **lib/editor/tools/index.ts** - 五大核心工具实现
+- **lib/editor/tools/document-tools.ts** - 多文档工具
+- **lib/editor/agent/runtime.ts** - ToolTrace 和 detectStuck
+- **lib/editor/block-index.ts** - BlockIndexService
+- **lib/editor/tools/middleware.ts** - ReadWriteGuard
 
 #### 3. Apply Change Agent 编辑操作流程
 

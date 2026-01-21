@@ -253,92 +253,175 @@ graph TB
     style ApplyAgent fill:#e8f5e9
 ```
 
-**2. Chat Optimization Agent (chatWithLesson) Core Workflow**
+**2. Editor Agent - LLM-Driven Document Editor (Core Innovation)**
 
-This is the key innovation: seamlessly connecting conversational interaction with automated editing through an intelligent tagging system ([NEEDS_CHANGE] / [NO_CHANGE]).
+This is the system's true core: an intelligent document editing Agent based on LangChain Tool Calling, enabling precise document operations through natural language instructions.
+
+### Architecture Overview
 
 ```mermaid
 graph TB
-    Start([User inputs optimization request in chat]) --> Input[Build Input]
+    User[User Natural Language Command] --> AgentLoop[Editor Agent Loop<br/>Max 30 iterations]
 
-    Input --> PrepareContext[Prepare Context]
-    PrepareContext --> CurrentLesson[Current Lesson Content<br/>currentLesson]
-    PrepareContext --> UserMsg[User Message<br/>userMessage]
+    AgentLoop --> SystemPrompt[System Prompt<br/>Define efficiency rules & workflow]
+    SystemPrompt --> LLM[DeepSeek LLM<br/>temperature: 0.2]
 
-    CurrentLesson --> ChatAgent[Chat Agent<br/>chatWithLesson/Stream]
-    UserMsg --> ChatAgent
+    LLM --> Decision{Need to<br/>call tools?}
 
-    ChatAgent --> Prompt[Chat Prompt Template<br/>System Role + User Request]
+    Decision -->|Yes| ToolDispatch[Tool Dispatcher]
+    Decision -->|No| Response[Return Final Response]
 
-    Prompt --> SystemRole{System Prompt defines 3 roles}
-    SystemRole --> Role1[1. Answer lesson questions]
-    SystemRole --> Role2[2. Provide improvement suggestions]
-    SystemRole --> Role3[3. Describe specific modifications]
+    ToolDispatch --> Tools[Five Core Tools]
 
-    Role1 --> LLM[DeepSeek LLM<br/>temperature: 0.7]
-    Role2 --> LLM
-    Role3 --> LLM
+    subgraph Tools[Five Core Tools]
+        ListBlocks[list_blocks<br/>List document structure]
+        ReadBlocks[read_blocks<br/>Batch read content]
+        EditBlocks[edit_blocks<br/>Batch edit content]
+        AddBlock[add_block<br/>Add new block]
+        DeleteBlock[delete_block<br/>Delete block]
+    end
 
-    LLM --> Analysis[LLM Deep Analysis]
-    Analysis --> Decision{Determine response type}
+    ListBlocks --> BlockIndex[BlockIndexService<br/>Document Index]
+    ReadBlocks --> BlockIndex
+    EditBlocks --> PendingDiffs[Pending Diffs<br/>Confirmation Queue]
+    AddBlock --> PendingDiffs
+    DeleteBlock --> PendingDiffs
 
-    Decision -->|Pure info query| NoChange[Add tag<br/>[NO_CHANGE]]
-    Decision -->|Contains modification| NeedsChange[Add tag<br/>[NEEDS_CHANGE]]
+    BlockIndex --> Guard[ReadWriteGuard<br/>Access Control]
+    PendingDiffs --> Guard
 
-    NoChange --> Response1[Generate conversational reply<br/>No edit triggered]
-    NeedsChange --> Response2[Generate optimization suggestion<br/>Describe modifications]
+    Guard --> ToolResult[Tool Execution Result]
+    ToolResult --> ToolTrace[ToolTrace<br/>Call History Tracking]
 
-    Response1 --> Stream{Streaming mode?}
-    Response2 --> Stream
+    ToolTrace --> StuckDetector{Detect<br/>stuck loop?}
+    StuckDetector -->|Normal| AgentLoop
+    StuckDetector -->|Stuck| EarlyExit[Early Exit]
 
-    Stream -->|Yes| StreamChunks[Return chunks<br/>Real-time display]
-    Stream -->|No| FullResponse[Return full response]
+    PendingDiffs --> UserConfirm[User Confirms Changes]
+    UserConfirm --> ApplyToDb[(Apply to Database)]
 
-    StreamChunks --> DetectTag[Detect Tag]
-    FullResponse --> DetectTag
-
-    DetectTag --> CheckTag{Detected<br/>[NEEDS_CHANGE]?}
-
-    CheckTag -->|No| ShowResponse[Show chat reply]
-    CheckTag -->|Yes| ShowButton[Show Apply Change button]
-
-    ShowButton --> UserClick{User clicks<br/>Apply?}
-    UserClick -->|Yes| TriggerApply[Trigger applyChangeWithLLM]
-    UserClick -->|No| End1([Keep suggestion state])
-
-    TriggerApply --> ApplyAgent[Apply Change Agent<br/>Execute JSON edit operations]
-    ApplyAgent --> UpdateDB[(Update Database)]
-    UpdateDB --> End2([Lesson Updated])
-
-    ShowResponse --> End3([Chat Ended])
-
-    style ChatAgent fill:#fff4e1
     style LLM fill:#c5e1a5
-    style NeedsChange fill:#ffcdd2
-    style NoChange fill:#b3e5fc
-    style ShowButton fill:#a5d6a7
-    style ApplyAgent fill:#e8f5e9
+    style Tools fill:#e1f5ff
+    style PendingDiffs fill:#fff4e1
+    style Guard fill:#ffcdd2
+    style StuckDetector fill:#ce93d8
 ```
 
-**Key Innovation Points:**
+### Workflow Deep Dive
 
-1. **Intelligent Tagging System**:
-   - `[NEEDS_CHANGE]` - LLM determines response contains executable modification suggestions
-   - `[NO_CHANGE]` - Pure information query or discussion, no editing needed
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant A as Editor Agent
+    participant LLM as DeepSeek LLM
+    participant T as Tool System
+    participant D as Pending Diffs
+    participant DB as Database
 
-2. **Triple Role Positioning**:
-   - Q&A Assistant: Explain lesson content
-   - Optimization Advisor: Provide improvement suggestions
-   - Edit Guidance: Describe specific modification plans
+    U->>A: "Add group discussion after section 2"
+    A->>LLM: System Prompt + User Message
 
-3. **Seamless Integration**:
-   - Bridge between conversational suggestions → automated editing
-   - Eliminates manual copy-paste by users
-   - Maintains traceable edit history
+    Note over LLM: Plan operations<br/>list → read → edit
 
-4. **Dual Mode Support**:
-   - `chatWithLesson()` - Full response mode
-   - `chatWithLessonStream()` - Streaming real-time display
+    LLM->>T: tool_call: list_blocks()
+    T->>T: BlockIndexService.getBlockIndex()
+    T-->>LLM: Return structure + previews
+
+    LLM->>T: tool_call: read_blocks([block_3, block_4])
+    T->>T: Batch read specified blocks
+    T-->>LLM: Return full content
+
+    Note over LLM: Analyze content<br/>Generate edit plan
+
+    LLM->>T: tool_call: add_block(afterBlockId: "block_3", ...)
+    T->>D: Create PendingDiff
+    D-->>T: diff_id: "diff-123"
+    T-->>LLM: "Pending change created"
+
+    LLM-->>A: Final response (no more tool_calls)
+    A-->>U: "Group discussion added (pending confirmation)"
+
+    U->>D: Click "Apply Changes"
+    D->>DB: Execute diff
+    DB-->>U: Update successful
+```
+
+### Five Core Tools
+
+| Tool | Function | Batch Support | Permission Protection |
+|------|----------|--------------|---------------------|
+| **list_blocks** | List document structure & content previews | N/A | Mark as read |
+| **read_blocks** | Batch read block content (with context) | ✅ Max 25 | ReadWriteGuard |
+| **edit_blocks** | Batch edit block content | ✅ Max 25 | Must read first |
+| **add_block** | Add new block after specified position | Single | Non-empty validation |
+| **delete_block** | Delete specified block | Single | Must read first |
+
+### Key Innovation Mechanisms
+
+#### 1. **Pending Diffs Mechanism**
+All edit operations first generate `PendingDiff` objects, applied to database only after user confirmation:
+- **Safety**: Prevents LLM from directly modifying data by mistake
+- **Traceability**: Complete change history recording (EditHistory table)
+- **Reversibility**: Users can reject AI-suggested changes
+
+```typescript
+interface PendingDiff {
+  id: string           // diff-timestamp-random
+  blockId: string      // Target block ID
+  action: 'update' | 'add' | 'delete'
+  oldContent: string   // Original content
+  newContent: string   // New content
+  reason: string       // LLM-provided modification reason
+}
+```
+
+#### 2. **ReadWriteGuard (Read-Write Protection)**
+Prevents LLM "write-before-read" error patterns:
+- **Rule**: Must call `read_blocks` before edit/delete
+- **Detection**: `guard.canEdit(blockId)` returns `{allowed: false, error: "..."}`
+- **Purpose**: Forces Agent to understand content before modification
+
+#### 3. **Efficiency Rules (System Prompt Enforced)**
+- Maximum 3-step workflow: `list_blocks` → `read_blocks` → `edit_blocks`
+- Batch operations preferred: Process multiple blocks in one call
+- Read-only queries in 2 steps: `list_blocks` → answer directly (skip unnecessary reads)
+
+#### 4. **Stuck Detection Mechanism**
+Detects three loop patterns:
+- 3 consecutive `list_blocks` calls
+- 3 consecutive `read_blocks` calls with identical parameters
+- 10 consecutive calls without any edit operations
+
+**Trigger mechanism**:
+```typescript
+detectStuck(toolTrace) → {
+  isStuck: true,
+  reason: "list_blocks called 3 times consecutively"
+}
+```
+
+#### 5. **Multi-Document Support**
+Two additional tools for multi-document editing:
+- `list_documents` - List all open documents
+- `switch_document(docId)` - Switch active document
+- Auto-reset BlockIndex and Guard after switching
+
+### Technical Architecture Highlights
+
+1. **LangChain Tool Calling**: Native support for OpenAI-style function calling
+2. **Streaming Output**: `runEditorAgentStream()` returns tool calls and content in real-time
+3. **Context Management**: `BlockIndexService` provides efficient block indexing and search
+4. **State Tracking**: `ToolTrace` ring buffer records last 30 calls
+5. **Error Recovery**: Tool execution failures don't interrupt loop, return error info to LLM for retry
+
+### Implementation Files
+
+- **lib/editor/agent.ts** - Agent main loop and streaming output
+- **lib/editor/tools/index.ts** - Five core tools implementation
+- **lib/editor/tools/document-tools.ts** - Multi-document tools
+- **lib/editor/agent/runtime.ts** - ToolTrace and detectStuck
+- **lib/editor/block-index.ts** - BlockIndexService
+- **lib/editor/tools/middleware.ts** - ReadWriteGuard
 
 **3. Apply Change Agent Edit Operation Flow**
 
