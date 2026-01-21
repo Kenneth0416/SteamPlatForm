@@ -21,8 +21,8 @@ import {
   createListBlocksTool,
   createReadBlocksTool,
   createEditBlocksTool,
-  createAddBlockTool,
-  createDeleteBlockTool,
+  createAddBlocksTool,
+  createDeleteBlocksTool,
   createEditorTools,
   ToolContext,
 } from '@/lib/editor/tools'
@@ -179,33 +179,42 @@ describe('LLM Tools', () => {
     })
   })
 
-  describe('add_block tool', () => {
+  describe('add_blocks tool', () => {
     it('should reject empty content', async () => {
       ctx.guard.markDocumentRead()
 
-      const tool = createAddBlockTool(ctx)
+      const tool = createAddBlocksTool(ctx)
       const result = await tool.func({
-        afterBlockId: 'b1',
-        type: 'paragraph',
-        content: '   ',
-        reason: 'Test',
+        additions: [{
+          afterBlockId: 'b1',
+          type: 'paragraph',
+          content: '   ',
+          reason: 'Test',
+        }],
       })
 
-      expect(result).toContain('Error')
-      expect(result).toContain('empty or whitespace-only')
+      const parsed = JSON.parse(result)
+      expect(parsed.results).toHaveLength(1)
+      expect(parsed.results[0].ok).toBe(false)
+      expect(parsed.results[0].error).toContain('empty or whitespace-only')
     })
     it('should create pending diff for adding block', async () => {
       ctx.guard.markDocumentRead()
 
-      const tool = createAddBlockTool(ctx)
+      const tool = createAddBlocksTool(ctx)
       const result = await tool.func({
-        afterBlockId: 'b1',
-        type: 'paragraph',
-        content: 'New paragraph',
-        reason: 'Adding content',
+        additions: [{
+          afterBlockId: 'b1',
+          type: 'paragraph',
+          content: 'New paragraph',
+          reason: 'Adding content',
+        }],
       })
 
-      expect(result).toContain('pending add')
+      const parsed = JSON.parse(result)
+      expect(parsed.results).toHaveLength(1)
+      expect(parsed.results[0].ok).toBe(true)
+      expect(parsed.results[0].diffId).toBeDefined()
       expect(pendingDiffs).toHaveLength(1)
       expect(pendingDiffs[0].action).toBe('add')
       expect(pendingDiffs[0].blockId).toBe('b1')
@@ -214,61 +223,79 @@ describe('LLM Tools', () => {
     it('should support adding at beginning with null afterBlockId', async () => {
       ctx.guard.markDocumentRead()
 
-      const tool = createAddBlockTool(ctx)
+      const tool = createAddBlocksTool(ctx)
       const result = await tool.func({
-        afterBlockId: null,
-        type: 'heading',
-        content: 'New Title',
-        level: 1,
-        reason: 'Adding title',
+        additions: [{
+          afterBlockId: null,
+          type: 'heading',
+          content: 'New Title',
+          level: 1,
+          reason: 'Adding title',
+        }],
       })
 
-      expect(result).toContain('pending add')
-      expect(result).toContain('start')
+      const parsed = JSON.parse(result)
+      expect(parsed.results).toHaveLength(1)
+      expect(parsed.results[0].ok).toBe(true)
+      expect(parsed.results[0].afterBlockId).toBe(null)
       expect(pendingDiffs[0].blockId).toBe('__start__')
     })
 
     it('should reject add without reading document', async () => {
-      const tool = createAddBlockTool(ctx)
+      const tool = createAddBlocksTool(ctx)
       const result = await tool.func({
-        afterBlockId: 'b1',
-        type: 'paragraph',
-        content: 'New',
-        reason: 'Test',
+        additions: [{
+          afterBlockId: 'b1',
+          type: 'paragraph',
+          content: 'New',
+          reason: 'Test',
+        }],
       })
 
-      expect(result).toContain('Error')
+      const parsed = JSON.parse(result)
+      expect(parsed.results).toHaveLength(1)
+      expect(parsed.results[0].ok).toBe(false)
+      expect(parsed.results[0].error).toContain('list_blocks')
       expect(pendingDiffs).toHaveLength(0)
     })
 
     it('should return error for non-existent afterBlockId', async () => {
       ctx.guard.markDocumentRead()
 
-      const tool = createAddBlockTool(ctx)
+      const tool = createAddBlocksTool(ctx)
       const result = await tool.func({
-        afterBlockId: 'nonexistent',
-        type: 'paragraph',
-        content: 'New',
-        reason: 'Test',
+        additions: [{
+          afterBlockId: 'nonexistent',
+          type: 'paragraph',
+          content: 'New',
+          reason: 'Test',
+        }],
       })
 
-      expect(result).toContain('Error')
-      expect(result).toContain('not found')
+      const parsed = JSON.parse(result)
+      expect(parsed.results).toHaveLength(1)
+      expect(parsed.results[0].ok).toBe(false)
+      expect(parsed.results[0].error).toContain('not found')
     })
   })
 
-  describe('delete_block tool', () => {
+  describe('delete_blocks tool', () => {
     it('should create pending diff for deletion', async () => {
       ctx.guard.markDocumentRead()
       ctx.guard.markBlockRead('b2')
 
-      const tool = createDeleteBlockTool(ctx)
+      const tool = createDeleteBlocksTool(ctx)
       const result = await tool.func({
-        blockId: 'b2',
-        reason: 'Removing unnecessary content',
+        deletions: [{
+          blockId: 'b2',
+          reason: 'Removing unnecessary content',
+        }],
       })
 
-      expect(result).toContain('pending delete')
+      const parsed = JSON.parse(result)
+      expect(parsed.results).toHaveLength(1)
+      expect(parsed.results[0].ok).toBe(true)
+      expect(parsed.results[0].diffId).toBeDefined()
       expect(pendingDiffs).toHaveLength(1)
       expect(pendingDiffs[0].action).toBe('delete')
       expect(pendingDiffs[0].oldContent).toBe('This is the first paragraph.')
@@ -278,13 +305,18 @@ describe('LLM Tools', () => {
     it('should reject delete without reading block', async () => {
       ctx.guard.markDocumentRead()
 
-      const tool = createDeleteBlockTool(ctx)
+      const tool = createDeleteBlocksTool(ctx)
       const result = await tool.func({
-        blockId: 'b2',
-        reason: 'Test',
+        deletions: [{
+          blockId: 'b2',
+          reason: 'Test',
+        }],
       })
 
-      expect(result).toContain('Error')
+      const parsed = JSON.parse(result)
+      expect(parsed.results).toHaveLength(1)
+      expect(parsed.results[0].ok).toBe(false)
+      expect(parsed.results[0].error).toContain('read_blocks')
       expect(pendingDiffs).toHaveLength(0)
     })
 
@@ -292,14 +324,18 @@ describe('LLM Tools', () => {
       ctx.guard.markDocumentRead()
       ctx.guard.markBlockRead('nonexistent')
 
-      const tool = createDeleteBlockTool(ctx)
+      const tool = createDeleteBlocksTool(ctx)
       const result = await tool.func({
-        blockId: 'nonexistent',
-        reason: 'Test',
+        deletions: [{
+          blockId: 'nonexistent',
+          reason: 'Test',
+        }],
       })
 
-      expect(result).toContain('Error')
-      expect(result).toContain('not found')
+      const parsed = JSON.parse(result)
+      expect(parsed.results).toHaveLength(1)
+      expect(parsed.results[0].ok).toBe(false)
+      expect(parsed.results[0].error).toContain('not found')
     })
   })
 
@@ -312,8 +348,8 @@ describe('LLM Tools', () => {
         'list_blocks',
         'read_blocks',
         'edit_blocks',
-        'add_block',
-        'delete_block',
+        'add_blocks',
+        'delete_blocks',
       ])
     })
   })

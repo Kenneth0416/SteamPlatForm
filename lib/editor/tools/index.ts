@@ -123,84 +123,109 @@ export function createEditBlocksTool(ctx: ToolContext) {
   })
 }
 
-export function createAddBlockTool(ctx: ToolContext) {
+export function createAddBlocksTool(ctx: ToolContext) {
   return new DynamicStructuredTool({
-    name: 'add_block',
-    description: 'Add a new block after a specified block. Use afterBlockId=null to insert at the beginning. Content must not be empty.',
+    name: 'add_blocks',
+    description: 'PREFERRED: Batch add multiple blocks in ONE call (max 25). Always use this over add_block.',
     schema: z.object({
-      afterBlockId: z.string().nullable().describe('ID of block to insert after, or null for beginning'),
-      type: z.enum(['heading', 'paragraph', 'code', 'list-item']).describe('Type of the new block'),
-      content: z.string().min(1).describe('Content of the new block (must not be empty)'),
-      level: z.number().optional().describe('Level for headings (1-6) or list nesting depth'),
-      reason: z.string().describe('Explanation of why this block is being added'),
+      additions: z.array(z.object({
+        afterBlockId: z.string().nullable().describe('ID of block to insert after, or null for beginning'),
+        type: z.enum(['heading', 'paragraph', 'code', 'list-item']).describe('Type of the new block'),
+        content: z.string().min(1).describe('Content of the new block (must not be empty)'),
+        level: z.number().optional().describe('Level for headings (1-6) or list nesting depth'),
+        reason: z.string().describe('Explanation of why this block is being added'),
+      })).min(1).describe('Array of additions'),
     }),
-    func: async ({ afterBlockId, type, content, level, reason }) => {
-      // Validate content is not empty or whitespace-only
-      if (!content.trim()) {
-        return `Error: Content cannot be empty or whitespace-only. Please provide meaningful content.`
-      }
+    func: async ({ additions }) => {
+      const batch = additions.slice(0, MAX_BATCH_SIZE)
 
-      const check = ctx.guard.canAdd()
-      if (!check.allowed) {
-        return `Error: ${check.error}`
-      }
-
-      if (afterBlockId) {
-        const block = ctx.blockIndex.getById(afterBlockId)
-        if (!block) {
-          return `Error: Block "${afterBlockId}" not found`
+      const results = batch.map((a) => {
+        // Validate content is not empty or whitespace-only
+        if (!a.content.trim()) {
+          return { afterBlockId: a.afterBlockId, ok: false, error: 'Content cannot be empty or whitespace-only' }
         }
-      }
 
-      const diff: PendingDiff = {
-        id: generateDiffId(),
-        blockId: afterBlockId || '__start__',
-        action: 'add',
-        oldContent: '',
-        newContent: JSON.stringify({ type, content: content.trim(), level }),
-        reason,
-      }
+        const check = ctx.guard.canAdd()
+        if (!check.allowed) {
+          return { afterBlockId: a.afterBlockId, ok: false, error: check.error }
+        }
 
-      ctx.pendingDiffs.push(diff)
-      ctx.onDiffCreated?.(diff)
+        if (a.afterBlockId) {
+          const block = ctx.blockIndex.getById(a.afterBlockId)
+          if (!block) {
+            return { afterBlockId: a.afterBlockId, ok: false, error: `Block "${a.afterBlockId}" not found` }
+          }
+        }
 
-      return `Created pending add after ${afterBlockId || 'start'}. Diff ID: ${diff.id}\nType: ${type}\nContent: ${content.slice(0, 50)}...\nReason: ${reason}\n\nUser must confirm this change.`
+        const diff: PendingDiff = {
+          id: generateDiffId(),
+          blockId: a.afterBlockId || '__start__',
+          action: 'add',
+          oldContent: '',
+          newContent: JSON.stringify({ type: a.type, content: a.content.trim(), level: a.level }),
+          reason: a.reason,
+        }
+
+        ctx.pendingDiffs.push(diff)
+        ctx.onDiffCreated?.(diff)
+
+        return { afterBlockId: a.afterBlockId, ok: true, diffId: diff.id }
+      })
+
+      return JSON.stringify({ results }, null, 2)
     },
   })
 }
 
-export function createDeleteBlockTool(ctx: ToolContext) {
+export function createDeleteBlocksTool(ctx: ToolContext) {
   return new DynamicStructuredTool({
-    name: 'delete_block',
-    description: 'Delete a specific block. MUST call read_block first.',
+    name: 'delete_blocks',
+    description: 'PREFERRED: Batch delete multiple blocks in ONE call (max 25). MUST call read_blocks first.',
     schema: z.object({
-      blockId: z.string().describe('The ID of the block to delete'),
-      reason: z.string().describe('Explanation of why this block is being deleted'),
+      deletions: z.array(z.object({
+        blockId: z.string().describe('The ID of the block to delete'),
+        reason: z.string().describe('Explanation of why this block is being deleted'),
+      })).min(1).describe('Array of deletions'),
     }),
-    func: async ({ blockId, reason }) => {
-      const check = ctx.guard.canDelete(blockId)
-      if (!check.allowed) {
-        return `Error: ${check.error}`
-      }
+    func: async ({ deletions }) => {
+      const batch = deletions.slice(0, MAX_BATCH_SIZE)
+      const blockIds = batch.map(d => d.blockId)
 
-      const block = ctx.blockIndex.getById(blockId)
-      if (!block) {
-        return `Error: Block "${blockId}" not found`
-      }
+      // Batch validation using canDeleteBlocks
+      const validation = ctx.guard.canDeleteBlocks(blockIds)
 
-      const diff: PendingDiff = {
-        id: generateDiffId(),
-        blockId,
-        action: 'delete',
-        oldContent: block.content,
-        newContent: '',
-        reason,
-      }
+      const results = batch.map((d) => {
+        // Check individual validation result
+        if (validation.errors.has(d.blockId)) {
+          return { blockId: d.blockId, ok: false, error: validation.errors.get(d.blockId) }
+        }
 
-      ctx.pendingDiffs.push(diff)
-      ctx.onDiffCreated?.(diff)
+        // Use effective content (with pending overlay)
+        const oldContent = ctx.blockIndex.getEffectiveContent(d.blockId, ctx.pendingDiffs)
+        if (oldContent === null) {
+          const block = ctx.blockIndex.getById(d.blockId)
+          if (!block) {
+            return { blockId: d.blockId, ok: false, error: `Block "${d.blockId}" not found` }
+          }
+          return { blockId: d.blockId, ok: false, error: 'Block already deleted' }
+        }
 
-      return `Created pending delete for block ${blockId}. Diff ID: ${diff.id}\nContent to delete: ${block.content.slice(0, 50)}...\nReason: ${reason}\n\nUser must confirm this change.`
+        const diff: PendingDiff = {
+          id: generateDiffId(),
+          blockId: d.blockId,
+          action: 'delete',
+          oldContent,
+          newContent: '',
+          reason: d.reason,
+        }
+
+        ctx.pendingDiffs.push(diff)
+        ctx.onDiffCreated?.(diff)
+
+        return { blockId: d.blockId, ok: true, diffId: diff.id }
+      })
+
+      return JSON.stringify({ results }, null, 2)
     },
   })
 }
@@ -210,8 +235,8 @@ export function createEditorTools(ctx: ToolContext) {
     createListBlocksTool(ctx),
     createReadBlocksTool(ctx),
     createEditBlocksTool(ctx),
-    createAddBlockTool(ctx),
-    createDeleteBlockTool(ctx),
+    createAddBlocksTool(ctx),
+    createDeleteBlocksTool(ctx),
   ]
 }
 

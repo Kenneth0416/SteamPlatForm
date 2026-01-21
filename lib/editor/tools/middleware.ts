@@ -67,6 +67,22 @@ export class ReadWriteGuard {
     return this.canEdit(blockId)
   }
 
+  canDeleteBlocks(blockIds: string[]): { allowed: boolean; errors: Map<string, string> } {
+    const errors = new Map<string, string>()
+    if (!this.documentRead) {
+      for (const id of blockIds) {
+        errors.set(id, 'Must call list_blocks before deleting.')
+      }
+      return { allowed: false, errors }
+    }
+    for (const id of blockIds) {
+      if (!this.readBlocks.has(id)) {
+        errors.set(id, `Must call read_blocks first.`)
+      }
+    }
+    return { allowed: errors.size === 0, errors }
+  }
+
   canAdd(): { allowed: boolean; error?: string } {
     if (!this.documentRead) {
       return {
