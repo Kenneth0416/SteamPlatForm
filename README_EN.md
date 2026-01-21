@@ -203,6 +203,109 @@ sequenceDiagram
     Frontend-->>User: Display lesson
 ```
 
+### d) **AI Agent Architecture Deep Dive**
+
+**1. Three AI Agents Collaboration Architecture**
+
+```mermaid
+graph TB
+    subgraph "User Interface Layer"
+        UI[Frontend UI]
+    end
+
+    subgraph "AI Agent Layer"
+        LessonAgent[Lesson Generation Agent<br/>generateLesson]
+        ChatAgent[Chat Optimization Agent<br/>chatWithLesson]
+        ApplyAgent[Change Application Agent<br/>applyChangeWithLLM]
+    end
+
+    subgraph "LangChain Core"
+        Prompt[Prompt Template]
+        LLM[DeepSeek LLM]
+        Parser[Output Parser]
+    end
+
+    subgraph "Data Storage"
+        DB[(PostgreSQL)]
+    end
+
+    UI -->|1. Submit Requirements| LessonAgent
+    LessonAgent --> Prompt
+    Prompt --> LLM
+    LLM --> Parser
+    Parser -->|Generate Lesson| DB
+    DB -->|2. Load Lesson| UI
+
+    UI -->|3. Send Optimization Request| ChatAgent
+    ChatAgent --> Prompt
+    Prompt --> LLM
+    LLM --> Parser
+    Parser -->|Suggest Changes| UI
+
+    UI -->|4. Apply Changes| ApplyAgent
+    ApplyAgent --> Prompt
+    Prompt --> LLM
+    LLM -->|JSON Edit Operations| ApplyAgent
+    ApplyAgent -->|5. Update Lesson| DB
+
+    style LessonAgent fill:#e1f5ff
+    style ChatAgent fill:#fff4e1
+    style ApplyAgent fill:#e8f5e9
+```
+
+**2. LangChain LCEL Pipeline Workflow**
+
+```mermaid
+flowchart LR
+    Input[Input Data] --> PromptTemplate[Prompt Template<br/>Inject Variables]
+    PromptTemplate --> Model[LLM Model<br/>DeepSeek API]
+    Model --> OutputParser[Output Parser<br/>Format Output]
+    OutputParser --> Result[Return Result]
+
+    Model -.->|Stream Mode| StreamChunk[Stream Output Chunks]
+    StreamChunk -.-> Result
+
+    style PromptTemplate fill:#bbdefb
+    style Model fill:#c5e1a5
+    style OutputParser fill:#ffccbc
+```
+
+**3. Apply Change Agent Edit Operation Flow**
+
+```mermaid
+stateDiagram-v2
+    [*] --> ReceiveChangeRequest
+    ReceiveChangeRequest --> InvokeLLM: Receive Change Request
+    InvokeLLM --> ParseJSON: Invoke LLM Generate Edit Ops
+
+    ParseJSON --> ValidateAction: Parse JSON Instructions
+
+    ValidateAction --> Replace: action=replace
+    ValidateAction --> Delete: action=delete
+    ValidateAction --> InsertAfter: action=insert_after
+    ValidateAction --> InsertBefore: action=insert_before
+
+    Replace --> FuzzyMatchOld: Fuzzy Match old_text
+    Delete --> FuzzyMatchOld
+    InsertAfter --> FuzzyMatchAnchor: Fuzzy Match anchor
+    InsertBefore --> FuzzyMatchAnchor
+
+    FuzzyMatchOld --> ExecuteReplace: Execute Replacement
+    FuzzyMatchAnchor --> ExecuteInsert: Execute Insertion
+
+    ExecuteReplace --> ReturnDocument: Return Updated Document
+    ExecuteInsert --> ReturnDocument
+
+    ReturnDocument --> [*]
+
+    note right of FuzzyMatchOld
+        Smart Matching:
+        - Ignore markdown markers
+        - Ignore whitespace diffs
+        - Sliding window scan
+    end note
+```
+
 ---
 
 ## 🚀 Quick Start

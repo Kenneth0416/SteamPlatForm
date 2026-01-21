@@ -203,6 +203,109 @@ sequenceDiagram
     Frontend-->>User: 显示课程
 ```
 
+### AI Agent 架构详解
+
+#### 1. 三大 AI Agent 协作架构
+
+```mermaid
+graph TB
+    subgraph "用户交互层"
+        UI[前端界面]
+    end
+
+    subgraph "AI Agent 层"
+        LessonAgent[课程生成 Agent<br/>generateLesson]
+        ChatAgent[对话优化 Agent<br/>chatWithLesson]
+        ApplyAgent[变更应用 Agent<br/>applyChangeWithLLM]
+    end
+
+    subgraph "LangChain 核心"
+        Prompt[Prompt Template]
+        LLM[DeepSeek LLM]
+        Parser[Output Parser]
+    end
+
+    subgraph "数据存储"
+        DB[(PostgreSQL)]
+    end
+
+    UI -->|1. 提交需求| LessonAgent
+    LessonAgent --> Prompt
+    Prompt --> LLM
+    LLM --> Parser
+    Parser -->|生成课程| DB
+    DB -->|2. 加载课程| UI
+
+    UI -->|3. 发送优化请求| ChatAgent
+    ChatAgent --> Prompt
+    Prompt --> LLM
+    LLM --> Parser
+    Parser -->|建议变更| UI
+
+    UI -->|4. 应用变更| ApplyAgent
+    ApplyAgent --> Prompt
+    Prompt --> LLM
+    LLM -->|JSON 编辑操作| ApplyAgent
+    ApplyAgent -->|5. 更新课程| DB
+
+    style LessonAgent fill:#e1f5ff
+    style ChatAgent fill:#fff4e1
+    style ApplyAgent fill:#e8f5e9
+```
+
+#### 2. LangChain LCEL Pipeline 工作流
+
+```mermaid
+flowchart LR
+    Input[输入数据] --> PromptTemplate[Prompt Template<br/>注入变量]
+    PromptTemplate --> Model[LLM Model<br/>DeepSeek API]
+    Model --> OutputParser[Output Parser<br/>格式化输出]
+    OutputParser --> Result[结果返回]
+
+    Model -.->|Stream 模式| StreamChunk[流式输出 Chunks]
+    StreamChunk -.-> Result
+
+    style PromptTemplate fill:#bbdefb
+    style Model fill:#c5e1a5
+    style OutputParser fill:#ffccbc
+```
+
+#### 3. Apply Change Agent 编辑操作流程
+
+```mermaid
+stateDiagram-v2
+    [*] --> 接收变更请求
+    接收变更请求 --> 调用LLM生成编辑操作
+    调用LLM生成编辑操作 --> 解析JSON编辑指令
+
+    解析JSON编辑指令 --> 验证操作类型
+
+    验证操作类型 --> Replace: action=replace
+    验证操作类型 --> Delete: action=delete
+    验证操作类型 --> InsertAfter: action=insert_after
+    验证操作类型 --> InsertBefore: action=insert_before
+
+    Replace --> Fuzzy匹配old_text
+    Delete --> Fuzzy匹配old_text
+    InsertAfter --> Fuzzy匹配anchor
+    InsertBefore --> Fuzzy匹配anchor
+
+    Fuzzy匹配old_text --> 执行替换
+    Fuzzy匹配anchor --> 执行插入
+
+    执行替换 --> 返回更新文档
+    执行插入 --> 返回更新文档
+
+    返回更新文档 --> [*]
+
+    note right of Fuzzy匹配old_text
+        智能匹配：
+        - 忽略 markdown 标记
+        - 处理空白符差异
+        - 滑动窗口扫描
+    end note
+```
+
 ---
 
 ## 🚀 快速开始
