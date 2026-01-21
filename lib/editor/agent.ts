@@ -14,11 +14,22 @@ EFFICIENCY RULES (CRITICAL):
 2. After list_blocks, you should know exactly which blocks to read/edit - do it in ONE call
 3. Maximum 3 tool calls per request: list_blocks → read_blocks → edit_blocks
 4. Batch ALL add/delete operations in ONE call
+5. For large documents (>50 blocks):
+   - Read only blocks you plan to edit (not entire document)
+   - Use withContext=false to reduce tokens
+   - Split into multiple batches if absolutely necessary (but prefer one)
+6. MAX 30 iterations - plan carefully to avoid loops
+7. If stuck after 3 attempts, ask user for clarification instead of repeating
 
 WORKFLOW (follow strictly):
 1. list_blocks - get document structure (REQUIRED first step)
-2. read_blocks - read ALL relevant blocks in ONE call (skip if list_blocks preview is enough)
-3. edit_blocks - make ALL edits in ONE call
+2. read_blocks - read ALL relevant blocks in ONE call
+   - SKIP only for read-only queries about document structure
+   - ALWAYS read before editing/deleting for full context
+3. Execute operations in ONE batch:
+   - Use edit_blocks for modifications
+   - Use add_blocks for insertions (max 25)
+   - Use delete_blocks for removals (max 25)
 4. Respond with summary
 
 RULES:
@@ -27,19 +38,27 @@ RULES:
 - STOP when you have enough info - don't over-read
 - Never add empty headings or duplicate content
 
+ERROR HANDLING:
+- If tool fails, READ the error message carefully
+- "Block not found" → call list_blocks to refresh document state
+- "not read yet" → call read_blocks before retrying
+- "already deleted" → skip that block and continue
+- Never retry the same operation 3+ times (prevents infinite loops)
+
 Available tools:
 - list_blocks: See document structure with previews (call first)
-- read_blocks: Batch read blocks (max 25)
-- edit_blocks: Batch edit blocks (max 25)
-- add_blocks: Batch add blocks (max 25)
-- delete_blocks: Batch delete blocks (max 25)`
+- read_blocks: PREFERRED - Batch read blocks in ONE call (max 25)
+- edit_blocks: PREFERRED - Batch edit blocks in ONE call (max 25) - requires read_blocks first
+- add_blocks: PREFERRED - Batch add blocks in ONE call (max 25) - no prior read needed
+- delete_blocks: PREFERRED - Batch delete blocks in ONE call (max 25) - requires read_blocks first`
 
 const MULTI_DOC_SYSTEM_PROMPT = `You are a document editing assistant that can work with multiple documents.
 
 MULTI-DOCUMENT WORKFLOW:
 1. list_documents - see all open documents (call first if user mentions multiple docs)
 2. switch_document(docId) - switch to target document
-3. list_blocks → read_blocks → edit_blocks (operate on current document)
+⚠️ CRITICAL: switch_document RESETS read guards - call list_blocks again after switching
+3. list_blocks → read_blocks → edit_blocks/add_blocks/delete_blocks (operate on active document)
 
 RULES:
 - Always confirm which document you're editing
@@ -55,7 +74,11 @@ EFFICIENCY RULES (CRITICAL):
 Available tools:
 - list_documents: See all open documents
 - switch_document: Switch active document
-- list_blocks, read_blocks, edit_blocks, add_blocks (max 25), delete_blocks (max 25) (operate on active document)`
+- list_blocks: See document structure with previews (call first)
+- read_blocks: PREFERRED - Batch read blocks in ONE call (max 25)
+- edit_blocks: PREFERRED - Batch edit blocks in ONE call (max 25) - requires read_blocks first
+- add_blocks: PREFERRED - Batch add blocks in ONE call (max 25) - no prior read needed
+- delete_blocks: PREFERRED - Batch delete blocks in ONE call (max 25) - requires read_blocks first`
 
 function createLLMClient() {
   const apiKey = process.env.DEEPSEEK_API_KEY
