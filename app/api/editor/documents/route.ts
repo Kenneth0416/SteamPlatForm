@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { parseMarkdown } from '@/lib/editor/parser'
 import { auth } from '@/lib/auth'
+import type { Prisma } from '@prisma/client'
+
+type EditorDocumentRow = Prisma.EditorDocumentGetPayload<{}>
 
 const requireAuth = async () => {
   const session = await auth()
@@ -22,7 +25,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'lessonId required' }, { status: 400 })
   }
 
-  const docs = await prisma.editorDocument.findMany({
+  const docs: EditorDocumentRow[] = await prisma.editorDocument.findMany({
     where: { lessonId },
     orderBy: { order: 'asc' },
   })
