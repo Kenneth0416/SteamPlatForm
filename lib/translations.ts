@@ -84,6 +84,19 @@ export const translations = {
     reset: "Reset",
     fillExample: "Fill with Example",
 
+    // Markdown editor diff panel
+    editor: {
+      pendingChanges: "Pending Changes",
+      rejectAll: "Reject All",
+      applyAll: "Apply All",
+      edit: "Edit",
+      add: "Add",
+      delete: "Delete",
+      collapseEditor: "Collapse editor",
+      viewPreview: "View preview",
+      editContent: "Edit content",
+    },
+
     // Mermaid diagram controls
     mermaid: {
       zoomIn: "Zoom In",
@@ -95,9 +108,9 @@ export const translations = {
 
     // Preview section
     previewTitle: "Lesson Plan Preview",
-    emptyStateTitle: "No Lesson Generated Yet",
+    emptyStateTitle: "Your Canvas Awaits",
     emptyStateDescription:
-      'Fill in the requirements and click "Generate Lesson Draft" to create your STEAM lesson plan.',
+      "Every great lesson starts with a spark. Share your vision, and let's bring STEAM to life together.",
     generating: "Generating lesson plan...",
     streaming: "Streaming document...",
     overview: "Overview",
@@ -424,6 +437,19 @@ export const translations = {
     reset: "重置",
     fillExample: "填入範例",
 
+    // Markdown editor diff panel
+    editor: {
+      pendingChanges: "待處理變更",
+      rejectAll: "全部拒絕",
+      applyAll: "全部套用",
+      edit: "編輯",
+      add: "新增",
+      delete: "刪除",
+      collapseEditor: "收合編輯器",
+      viewPreview: "檢視預覽",
+      editContent: "編輯內容",
+    },
+
     // Mermaid diagram controls
     mermaid: {
       zoomIn: "放大",
@@ -435,8 +461,8 @@ export const translations = {
 
     // Preview section
     previewTitle: "課程計畫預覽",
-    emptyStateTitle: "尚未生成課程",
-    emptyStateDescription: "填寫需求並點擊「生成課程草稿」來建立您的 STEAM 課程計畫。",
+    emptyStateTitle: "創意畫布已就緒",
+    emptyStateDescription: "每堂精彩的課程都始於一個靈感火花。分享您的願景，讓我們一起點燃 STEAM 的魔力。",
     generating: "正在生成課程計畫...",
     streaming: "文檔串流中...",
     overview: "概覽",

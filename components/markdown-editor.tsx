@@ -12,6 +12,7 @@ import { WysiwygEditor } from "@/components/wysiwyg-editor"
 import type { Lang } from "@/types/lesson"
 import type { PendingDiff } from "@/lib/editor/types"
 import { generateWordDiff } from "@/lib/editor/diff"
+import { translations } from "@/lib/translations"
 
 interface MarkdownEditorProps {
   value: string
@@ -51,31 +52,34 @@ function DiffHighlightPanel({
   onApply,
   onReject,
   onApplyAll,
-  onRejectAll
+  onRejectAll,
+  lang = 'en'
 }: {
   diffs: PendingDiff[]
   onApply?: (diffId: string) => void
   onReject?: (diffId: string) => void
   onApplyAll?: () => void
   onRejectAll?: () => void
+  lang?: Lang
 }) {
   if (diffs.length === 0) return null
+  const t = translations[lang].editor
 
   return (
     <div className="mb-4 p-3 border rounded-lg bg-muted/30">
       <div className="flex items-center justify-between mb-2">
         <div className="text-sm font-medium text-muted-foreground">
-          Pending Changes ({diffs.length})
+          {t.pendingChanges} ({diffs.length})
         </div>
         {diffs.length > 1 && (
           <div className="flex gap-2">
             <Button size="sm" variant="outline" onClick={onRejectAll}>
               <XCircle className="h-3 w-3 mr-1" />
-              Reject All
+              {t.rejectAll}
             </Button>
             <Button size="sm" onClick={onApplyAll}>
               <CheckCheck className="h-3 w-3 mr-1" />
-              Apply All
+              {t.applyAll}
             </Button>
           </div>
         )}
@@ -85,7 +89,7 @@ function DiffHighlightPanel({
           <div key={diff.id} className="text-sm border rounded p-2 bg-background">
             <div className="flex items-center justify-between mb-1">
               <div className="text-xs text-muted-foreground">
-                {diff.action === 'update' ? 'Edit' : diff.action === 'add' ? 'Add' : 'Delete'} - {diff.reason}
+                {diff.action === 'update' ? t.edit : diff.action === 'add' ? t.add : t.delete} - {diff.reason}
               </div>
               <div className="flex gap-1">
                 <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => onReject?.(diff.id)}>
@@ -146,6 +150,7 @@ export function MarkdownEditor({ value, onChange, isEditing, isExpanded, onToggl
   const [header, setHeader] = useState("")
   const [h1Groups, setH1Groups] = useState<H1Group[]>([])
   const parseTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const t = translations[lang].editor
 
   // Parse markdown into sections with H1 support (skip in edit mode, debounce for streaming)
   useEffect(() => {
@@ -258,8 +263,8 @@ export function MarkdownEditor({ value, onChange, isEditing, isExpanded, onToggl
     h1: ({ children }: { children?: React.ReactNode }) => <h1 className="text-2xl font-bold mb-4">{children}</h1>,
     h3: ({ children }: { children?: React.ReactNode }) => <h3 className="text-lg font-medium mt-4 mb-2">{children}</h3>,
     p: ({ children }: { children?: React.ReactNode }) => <p className="mb-3 text-sm leading-relaxed">{children}</p>,
-    ul: ({ children }: { children?: React.ReactNode }) => <ul className="list-disc list-inside mb-3 space-y-1 text-sm">{children}</ul>,
-    ol: ({ children }: { children?: React.ReactNode }) => <ol className="list-decimal list-inside mb-3 space-y-1 text-sm">{children}</ol>,
+    ul: ({ children }: { children?: React.ReactNode }) => <ul className="list-disc list-outside pl-5 mb-3 space-y-1 text-sm">{children}</ul>,
+    ol: ({ children }: { children?: React.ReactNode }) => <ol className="list-decimal list-outside pl-5 mb-3 space-y-1 text-sm">{children}</ol>,
     li: ({ children }: { children?: React.ReactNode }) => <li className="text-muted-foreground">{children}</li>,
     strong: ({ children }: { children?: React.ReactNode }) => <strong className="font-semibold text-foreground">{children}</strong>,
     code: ({ className, children }: { className?: string; children?: React.ReactNode }) => {
@@ -284,7 +289,7 @@ export function MarkdownEditor({ value, onChange, isEditing, isExpanded, onToggl
         <div className="absolute top-2 right-2 z-10 flex gap-1">
           {onToggleExpand && (
             <Button
-              aria-label="Collapse editor"
+              aria-label={t.collapseEditor}
               variant="ghost"
               size="icon"
               className="h-8 w-8"
@@ -295,7 +300,7 @@ export function MarkdownEditor({ value, onChange, isEditing, isExpanded, onToggl
           )}
           {onToggleEdit && (
             <Button
-              aria-label={isEditing ? "View preview" : "Edit content"}
+              aria-label={isEditing ? t.viewPreview : t.editContent}
               variant="ghost"
               size="icon"
               className="h-8 w-8"
@@ -327,6 +332,7 @@ export function MarkdownEditor({ value, onChange, isEditing, isExpanded, onToggl
                 onReject={onRejectDiff}
                 onApplyAll={onApplyAllDiffs}
                 onRejectAll={onRejectAllDiffs}
+                lang={lang}
               />
             )}
             <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]} components={markdownComponents}>
