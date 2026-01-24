@@ -108,10 +108,10 @@ describe('EditorStore', () => {
       expect(state.blocks[1].content).toBe('New paragraph')
     })
 
-    it('should add block at beginning when afterBlockId is null', () => {
+    it('should add block at end when afterBlockId is null', () => {
       useEditorStore.getState().addBlockAfter(null, 'heading', 'First', 1)
       const state = useEditorStore.getState()
-      expect(state.blocks[0].content).toBe('First')
+      expect(state.blocks[2].content).toBe('First')
     })
 
     it('should remove block', () => {

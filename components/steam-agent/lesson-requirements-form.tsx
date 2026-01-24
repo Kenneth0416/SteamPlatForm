@@ -54,7 +54,7 @@ export function LessonRequirementsForm({
 
   useEffect(() => {
     if (initialRequirements) {
-      setGradeLevel(initialRequirements.gradeLevel)
+      setGradeLevel(initialRequirements.gradeLevel as GradeLevel)
       setNumberOfSessions(initialRequirements.numberOfSessions)
       setDurationPerSession(initialRequirements.durationPerSession)
       setClassSize(initialRequirements.classSize?.toString() || "")
@@ -62,7 +62,7 @@ export function LessonRequirementsForm({
       setLessonTopic(initialRequirements.lessonTopic)
       setNotes(initialRequirements.notes || "")
       setSchoolThemes(initialRequirements.schoolThemes)
-      setTeachingApproach(initialRequirements.teachingApproach)
+      setTeachingApproach(initialRequirements.teachingApproach as TeachingApproach)
       setDifficultyLevel(initialRequirements.difficultyLevel)
     }
   }, [initialRequirements])

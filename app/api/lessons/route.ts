@@ -7,19 +7,18 @@ const requireAuth = async () => {
   if (!session?.user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
-  return null
+  return session
 }
 
 // GET /api/lessons - 獲取用戶的所有課程
 export async function GET(request: NextRequest) {
-  const unauthorized = await requireAuth()
-  if (unauthorized) {
-    return unauthorized
+  const session = await requireAuth()
+  if (!session?.user) {
+    return session as unknown as NextResponse
   }
 
   try {
     const { searchParams } = new URL(request.url)
-    const userId = searchParams.get("userId")
     const search = searchParams.get("search")
     const showFavoriteOnly = searchParams.get("showFavoriteOnly") === "true"
     const showArchived = searchParams.get("showArchived") === "true"
@@ -31,7 +30,7 @@ export async function GET(request: NextRequest) {
 
     const lessons = await prisma.lesson.findMany({
       where: {
-        ...(userId && { userId }),
+        userId: session.user.id, // 安全：強制使用當前會話用戶 ID
         isArchived: showArchived,
         isFavorite: showFavoriteOnly ? true : undefined,
         ...(search && {
@@ -72,40 +71,31 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ lessons: transformedLessons })
   } catch (error) {
     console.error("Error fetching lessons:", error)
-    return NextResponse.json({ error: "Failed to fetch lessons" }, { status: 500 })
+    return NextResponse.json(
+      { error: process.env.NODE_ENV === "development" ? (error as Error).message : "Failed to fetch lessons" },
+      { status: 500 }
+    )
   }
 }
 
 // POST /api/lessons - 創建新課程
 export async function POST(request: NextRequest) {
-  const unauthorized = await requireAuth()
-  if (unauthorized) {
-    return unauthorized
+  const session = await requireAuth()
+  if (!session?.user) {
+    return session as unknown as NextResponse
   }
 
   try {
     const body = await request.json()
-    const { userId, title, markdown, requirements } = body
+    const { title, markdown, requirements } = body
 
-    if (!userId || !markdown || !requirements) {
+    if (!markdown || !requirements) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 })
     }
 
-    // Ensure user exists (create if not)
-    await prisma.user.upsert({
-      where: { id: userId },
-      update: {},
-      create: {
-        id: userId,
-        email: `${userId}@placeholder.local`,
-        name: 'User',
-        password: '$2a$10$placeholder.hash.that.will.never.match',
-      },
-    })
-
     const lesson = await prisma.lesson.create({
       data: {
-        userId,
+        userId: session.user.id, // 安全：強制使用當前會話用戶 ID
         title: title || "Untitled Lesson",
         lessonPlan: { markdown },
         requirements,
@@ -121,6 +111,9 @@ export async function POST(request: NextRequest) {
     })
   } catch (error) {
     console.error("Error creating lesson:", error)
-    return NextResponse.json({ error: "Failed to create lesson" }, { status: 500 })
+    return NextResponse.json(
+      { error: process.env.NODE_ENV === "development" ? (error as Error).message : "Failed to create lesson" },
+      { status: 500 }
+    )
   }
 }

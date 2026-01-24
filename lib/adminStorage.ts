@@ -45,10 +45,12 @@ export async function deleteUser(userId: string): Promise<{ success: boolean; er
 // Update user role (admin only)
 export async function updateUserRole(userId: string, role: "user" | "admin"): Promise<{ success: boolean; error?: string }> {
   try {
+    // Convert lowercase role to uppercase for Prisma enum
+    const dbRole = role === "admin" ? "ADMIN" : "USER"
     const res = await fetch(`/api/admin/users/${userId}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ role }),
+      body: JSON.stringify({ role: dbRole }),
     })
     if (!res.ok) {
       const data = await res.json()
@@ -57,7 +59,7 @@ export async function updateUserRole(userId: string, role: "user" | "admin"): Pr
     return { success: true }
   } catch (error) {
     console.error("Error updating user role:", error)
-    return { success: false, error: "Failed to update role" }
+    return { success: false, error: "Failed to update user role" }
   }
 }
 

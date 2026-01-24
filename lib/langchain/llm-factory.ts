@@ -36,7 +36,7 @@ export function createLLMClient(
 ): ChatOpenAI {
   // Check if options is a preset string
   const presetOptions = typeof options === "string" ? PRESETS[options] : undefined
-  const config = presetOptions || options
+  const config: LLMClientOptions = presetOptions || (typeof options === "object" ? options : {})
 
   const apiKey = (typeof options === "object" ? options.apiKey : undefined) || process.env.DEEPSEEK_API_KEY
   if (!apiKey) {
@@ -44,7 +44,7 @@ export function createLLMClient(
   }
 
   // Determine model to use
-  const model = config?.model || process.env.DEEPSEEK_MODEL || "deepseek-chat"
+  const model = config.model || process.env.DEEPSEEK_MODEL || "deepseek-chat"
 
   // Log model selection for monitoring
   if (presetOptions) {
@@ -58,9 +58,9 @@ export function createLLMClient(
     model,
     apiKey,
     configuration: {
-      baseURL: config?.baseURL || process.env.DEEPSEEK_BASE_URL || "https://api.deepseek.com/v1",
+      baseURL: config.baseURL || process.env.DEEPSEEK_BASE_URL || "https://api.deepseek.com/v1",
     },
-    temperature: config?.temperature ?? 0.7,
-    maxTokens: config?.maxTokens ?? 4096,
+    temperature: config.temperature ?? 0.7,
+    maxTokens: config.maxTokens ?? 4096,
   })
 }

@@ -8,18 +8,8 @@ export type TeachingApproach = "inquiry" | "project" | "direct" | "collaborative
 
 export type DifficultyLevel = "beginner" | "intermediate" | "advanced"
 
-export interface LessonRequirements {
-  gradeLevel: GradeLevel
-  numberOfSessions: number
-  durationPerSession: number // in minutes
-  classSize?: number
-  steamDomains: STEAMDomain[]
-  lessonTopic: string
-  schoolThemes: string[]
-  teachingApproach: TeachingApproach
-  difficultyLevel: DifficultyLevel
-  notes?: string // 用户备注，传给大模型参考
-}
+import type { LessonRequirementsFromSchema } from "./lesson.schema"
+export type LessonRequirements = LessonRequirementsFromSchema
 
 export interface LessonOverview {
   title: string

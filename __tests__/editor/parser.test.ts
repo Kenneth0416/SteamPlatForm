@@ -169,12 +169,12 @@ describe('Markdown Parser', () => {
   })
 
   describe('addBlock', () => {
-    it('should add block at beginning when afterBlockId is null', () => {
+    it('should add block at end when afterBlockId is null', () => {
       const blocks = [{ id: 'b1', type: 'paragraph' as const, content: 'Existing', order: 0 }]
       const { blocks: updated, newBlock } = addBlock(blocks, null, 'heading', 'New Title', 1)
 
       expect(updated).toHaveLength(2)
-      expect(updated[0].content).toBe('New Title')
+      expect(updated[1].content).toBe('New Title')
       expect(updated[0].order).toBe(0)
       expect(updated[1].order).toBe(1)
     })

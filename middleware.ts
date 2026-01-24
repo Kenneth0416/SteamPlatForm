@@ -9,6 +9,7 @@ export function middleware(request: NextRequest) {
     pathname.startsWith("/_next") ||
     pathname.startsWith("/api/auth") ||
     pathname.startsWith("/api/export") ||
+    pathname.startsWith("/api/health") ||  // 健康检查端点
     pathname.includes(".")
   ) {
     return NextResponse.next()

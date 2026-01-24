@@ -10,6 +10,39 @@ services:
       - "5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    networks:
+      - steam-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: steam-lesson-app
+    ports:
+      - "3030:3030"
+    env_file:
+      - .env.docker.local
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - steam-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:3030/api/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      start_period: 60s
+      retries: 3
+
+networks:
+  steam-network:
+    driver: bridge
 
 volumes:
   postgres_data:

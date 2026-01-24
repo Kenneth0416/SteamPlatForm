@@ -2,7 +2,13 @@ import NextAuth from "next-auth"
 import Credentials from "next-auth/providers/credentials"
 import { PrismaAdapter } from "@auth/prisma-adapter"
 import { prisma } from "@/lib/prisma"
+import type { UserRole } from "@prisma/client"
 import bcrypt from "bcryptjs"
+
+// Convert Prisma enum to lowercase for frontend compatibility
+function normalizeRole(role: UserRole): "user" | "admin" {
+  return role.toLowerCase() as "user" | "admin"
+}
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
   adapter: PrismaAdapter(prisma),
@@ -43,7 +49,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           id: user.id,
           email: user.email,
           name: user.name,
-          role: user.role,
+          role: normalizeRole(user.role),  // Convert enum to lowercase string
         }
       },
     }),
@@ -52,14 +58,14 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     async jwt({ token, user }) {
       if (user) {
         token.id = user.id
-        token.role = user.role
+        token.role = user.role  // Already normalized in authorize
       }
       return token
     },
     async session({ session, token }) {
       if (session.user) {
         session.user.id = token.id as string
-        session.user.role = token.role as string
+        session.user.role = token.role as "user" | "admin"
       }
       return session
     },

@@ -1,19 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getVersions, getVersion, restoreVersion, getEditHistory } from '@/lib/editor/version'
 import { auth } from '@/lib/auth'
+import { verifyLessonOwnership } from '@/lib/api-utils'
 
 const requireAuth = async () => {
   const session = await auth()
   if (!session?.user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
-  return null
+  return session
 }
 
 export async function GET(request: NextRequest) {
-  const unauthorized = await requireAuth()
-  if (unauthorized) {
-    return unauthorized
+  const session = await requireAuth()
+  if (!session?.user) {
+    return session as unknown as NextResponse
   }
 
   const { searchParams } = new URL(request.url)
@@ -26,6 +27,12 @@ export async function GET(request: NextRequest) {
       { error: 'lessonId is required' },
       { status: 400 }
     )
+  }
+
+  // 驗證所有權
+  const ownership = await verifyLessonOwnership(lessonId, session.user.id)
+  if (!ownership.owned) {
+    return ownership.error as unknown as NextResponse
   }
 
   try {
@@ -50,16 +57,16 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     console.error('History error:', error)
     return NextResponse.json(
-      { error: 'Failed to get history' },
+      { error: process.env.NODE_ENV === 'development' ? (error as Error).message : 'Failed to get history' },
       { status: 500 }
     )
   }
 }
 
 export async function POST(request: NextRequest) {
-  const unauthorized = await requireAuth()
-  if (unauthorized) {
-    return unauthorized
+  const session = await requireAuth()
+  if (!session?.user) {
+    return session as unknown as NextResponse
   }
 
   try {
@@ -70,6 +77,12 @@ export async function POST(request: NextRequest) {
         { error: 'lessonId and version are required' },
         { status: 400 }
       )
+    }
+
+    // 驗證所有權
+    const ownership = await verifyLessonOwnership(lessonId, session.user.id)
+    if (!ownership.owned) {
+      return ownership.error as unknown as NextResponse
     }
 
     const blocks = await restoreVersion(lessonId, version)
@@ -84,7 +97,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('Restore error:', error)
     return NextResponse.json(
-      { error: 'Failed to restore version' },
+      { error: process.env.NODE_ENV === 'development' ? (error as Error).message : 'Failed to restore version' },
       { status: 500 }
     )
   }

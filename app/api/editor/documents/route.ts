@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { parseMarkdown } from '@/lib/editor/parser'
 import { auth } from '@/lib/auth'
+import { verifyLessonOwnership } from '@/lib/api-utils'
 import type { Prisma } from '@prisma/client'
 
 type EditorDocumentRow = Prisma.EditorDocumentGetPayload<{}>
@@ -11,18 +12,24 @@ const requireAuth = async () => {
   if (!session?.user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
-  return null
+  return session
 }
 
 export async function GET(req: NextRequest) {
-  const unauthorized = await requireAuth()
-  if (unauthorized) {
-    return unauthorized
+  const session = await requireAuth()
+  if (!session?.user) {
+    return session as unknown as NextResponse
   }
 
   const lessonId = req.nextUrl.searchParams.get('lessonId')
   if (!lessonId) {
     return NextResponse.json({ error: 'lessonId required' }, { status: 400 })
+  }
+
+  // 驗證所有權
+  const ownership = await verifyLessonOwnership(lessonId, session.user.id)
+  if (!ownership.owned) {
+    return ownership.error as unknown as NextResponse
   }
 
   const docs: EditorDocumentRow[] = await prisma.editorDocument.findMany({
@@ -44,9 +51,9 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const unauthorized = await requireAuth()
-  if (unauthorized) {
-    return unauthorized
+  const session = await requireAuth()
+  if (!session?.user) {
+    return session as unknown as NextResponse
   }
 
   const body = await req.json()
@@ -54,6 +61,12 @@ export async function POST(req: NextRequest) {
 
   if (!lessonId || !name || !type) {
     return NextResponse.json({ error: 'lessonId, name, type required' }, { status: 400 })
+  }
+
+  // 驗證所有權
+  const ownership = await verifyLessonOwnership(lessonId, session.user.id)
+  if (!ownership.owned) {
+    return ownership.error as unknown as NextResponse
   }
 
   const maxOrder = await prisma.editorDocument.aggregate({
@@ -83,9 +96,9 @@ export async function POST(req: NextRequest) {
 }
 
 export async function PUT(req: NextRequest) {
-  const unauthorized = await requireAuth()
-  if (unauthorized) {
-    return unauthorized
+  const session = await requireAuth()
+  if (!session?.user) {
+    return session as unknown as NextResponse
   }
 
   const body = await req.json()
@@ -95,7 +108,22 @@ export async function PUT(req: NextRequest) {
     return NextResponse.json({ error: 'id required' }, { status: 400 })
   }
 
-  const doc = await prisma.editorDocument.update({
+  // 驗證所有權（通過 lessonId）
+  const doc = await prisma.editorDocument.findFirst({
+    where: { id },
+    select: { lessonId: true },
+  })
+
+  if (!doc) {
+    return NextResponse.json({ error: 'Document not found' }, { status: 404 })
+  }
+
+  const ownership = await verifyLessonOwnership(doc.lessonId, session.user.id)
+  if (!ownership.owned) {
+    return ownership.error as unknown as NextResponse
+  }
+
+  const updated = await prisma.editorDocument.update({
     where: { id },
     data: {
       ...(name && { name }),
@@ -104,25 +132,40 @@ export async function PUT(req: NextRequest) {
   })
 
   return NextResponse.json({
-    id: doc.id,
-    name: doc.name,
-    type: doc.type,
-    content: doc.content,
-    blocks: parseMarkdown(doc.content).blocks,
+    id: updated.id,
+    name: updated.name,
+    type: updated.type,
+    content: updated.content,
+    blocks: parseMarkdown(updated.content).blocks,
     isDirty: false,
-    createdAt: doc.createdAt,
+    createdAt: updated.createdAt,
   })
 }
 
 export async function DELETE(req: NextRequest) {
-  const unauthorized = await requireAuth()
-  if (unauthorized) {
-    return unauthorized
+  const session = await requireAuth()
+  if (!session?.user) {
+    return session as unknown as NextResponse
   }
 
   const id = req.nextUrl.searchParams.get('id')
   if (!id) {
     return NextResponse.json({ error: 'id required' }, { status: 400 })
+  }
+
+  // 驗證所有權（通過 lessonId）
+  const doc = await prisma.editorDocument.findFirst({
+    where: { id },
+    select: { lessonId: true },
+  })
+
+  if (!doc) {
+    return NextResponse.json({ error: 'Document not found' }, { status: 404 })
+  }
+
+  const ownership = await verifyLessonOwnership(doc.lessonId, session.user.id)
+  if (!ownership.owned) {
+    return ownership.error as unknown as NextResponse
   }
 
   await prisma.editorDocument.delete({ where: { id } })

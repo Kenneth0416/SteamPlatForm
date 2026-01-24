@@ -17,6 +17,12 @@ function generateDiffId(): string {
   return `diff-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
 }
 
+// Block ID generator for add_blocks tool
+let blockIdCounter = 0
+function generateBlockId(): string {
+  return `block-${Date.now()}-${blockIdCounter++}`
+}
+
 export function createListBlocksTool(ctx: ToolContext) {
   return new DynamicStructuredTool({
     name: 'list_blocks',
@@ -126,10 +132,10 @@ export function createEditBlocksTool(ctx: ToolContext) {
 export function createAddBlocksTool(ctx: ToolContext) {
   return new DynamicStructuredTool({
     name: 'add_blocks',
-    description: 'PREFERRED: Batch add multiple blocks in ONE call (max 25). Always use this over add_block.',
+    description: 'PREFERRED: Batch add multiple blocks in ONE call (max 25). POSITIONING: afterBlockId=null appends to END; afterBlockId=<blockId> inserts AFTER that block. CHAINING: First block uses target position, subsequent blocks use previous newBlockId.',
     schema: z.object({
       additions: z.array(z.object({
-        afterBlockId: z.string().nullable().describe('ID of block to insert after, or null for beginning'),
+        afterBlockId: z.string().nullable().describe("ID of block to insert AFTER. Use null to append to document END. For middle insertions, use the target block's ID. When chaining multiple blocks, use previous block's newBlockId."),
         type: z.enum(['heading', 'paragraph', 'code', 'list-item']).describe('Type of the new block'),
         content: z.string().min(1).describe('Content of the new block (must not be empty)'),
         level: z.number().optional().describe('Level for headings (1-6) or list nesting depth'),
@@ -139,7 +145,10 @@ export function createAddBlocksTool(ctx: ToolContext) {
     func: async ({ additions }) => {
       const batch = additions.slice(0, MAX_BATCH_SIZE)
 
-      const results = batch.map((a) => {
+      // Track the last successfully added block's ID for auto-chaining
+      let lastAddedBlockId: string | null = null
+
+      const results = batch.map((a, index) => {
         // Validate content is not empty or whitespace-only
         if (!a.content.trim()) {
           return { afterBlockId: a.afterBlockId, ok: false, error: 'Content cannot be empty or whitespace-only' }
@@ -150,16 +159,31 @@ export function createAddBlocksTool(ctx: ToolContext) {
           return { afterBlockId: a.afterBlockId, ok: false, error: check.error }
         }
 
-        if (a.afterBlockId) {
-          const block = ctx.blockIndex.getById(a.afterBlockId)
-          if (!block) {
-            return { afterBlockId: a.afterBlockId, ok: false, error: `Block "${a.afterBlockId}" not found` }
+        // Auto-chain: For batch additions, always chain subsequent blocks to the previous one
+        // This ensures correct ordering regardless of what afterBlockId the LLM specifies
+        let effectiveAfterBlockId = a.afterBlockId
+        if (index > 0 && lastAddedBlockId !== null) {
+          // Always chain to the previous block in the batch
+          effectiveAfterBlockId = lastAddedBlockId
+        }
+
+        if (effectiveAfterBlockId) {
+          // Check if it's a newly created block from this batch or an existing block
+          const isNewBlock = effectiveAfterBlockId.startsWith('block-')
+          if (!isNewBlock) {
+            const block = ctx.blockIndex.getById(effectiveAfterBlockId)
+            if (!block) {
+              return { afterBlockId: a.afterBlockId, ok: false, error: `Block "${effectiveAfterBlockId}" not found` }
+            }
           }
         }
 
+        const newBlockId = generateBlockId() // pre-generate block ID
+
         const diff: PendingDiff = {
           id: generateDiffId(),
-          blockId: a.afterBlockId || '__start__',
+          blockId: effectiveAfterBlockId || '__start__',
+          newBlockId, // store pre-generated ID
           action: 'add',
           oldContent: '',
           newContent: JSON.stringify({ type: a.type, content: a.content.trim(), level: a.level }),
@@ -169,7 +193,10 @@ export function createAddBlocksTool(ctx: ToolContext) {
         ctx.pendingDiffs.push(diff)
         ctx.onDiffCreated?.(diff)
 
-        return { afterBlockId: a.afterBlockId, ok: true, diffId: diff.id }
+        // Update tracking for auto-chaining
+        lastAddedBlockId = newBlockId
+
+        return { afterBlockId: a.afterBlockId, ok: true, diffId: diff.id, newBlockId }
       })
 
       return JSON.stringify({ results }, null, 2)

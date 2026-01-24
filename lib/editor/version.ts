@@ -6,25 +6,28 @@ export async function createVersion(
   blocks: Block[],
   summary?: string
 ): Promise<{ id: string; version: number }> {
-  // Get next version number
-  const lastVersion = await prisma.documentVersion.findFirst({
-    where: { lessonId },
-    orderBy: { version: 'desc' },
-    select: { version: true },
+  // 使用事务确保版本号的原子性
+  return prisma.$transaction(async (tx) => {
+    // Get next version number
+    const lastVersion = await tx.documentVersion.findFirst({
+      where: { lessonId },
+      orderBy: { version: 'desc' },
+      select: { version: true },
+    })
+
+    const nextVersion = (lastVersion?.version ?? 0) + 1
+
+    const created = await tx.documentVersion.create({
+      data: {
+        lessonId,
+        version: nextVersion,
+        snapshot: blocks,
+        summary,
+      },
+    })
+
+    return { id: created.id, version: nextVersion }
   })
-
-  const nextVersion = (lastVersion?.version ?? 0) + 1
-
-  const created = await prisma.documentVersion.create({
-    data: {
-      lessonId,
-      version: nextVersion,
-      snapshot: blocks as unknown as object,
-      summary,
-    },
-  })
-
-  return { id: created.id, version: nextVersion }
 }
 
 export async function getVersions(lessonId: string) {

@@ -4,7 +4,6 @@ const API_BASE = "/api"
 
 // 課程相關 API
 export async function fetchLessons(
-  userId: string,
   options?: {
     search?: string
     showArchived?: boolean
@@ -13,7 +12,7 @@ export async function fetchLessons(
     sortOrder?: SortOrder
   }
 ): Promise<SavedLesson[]> {
-  const params = new URLSearchParams({ userId })
+  const params = new URLSearchParams()
   if (options?.search) params.set("search", options.search)
   if (options?.showArchived) params.set("showArchived", "true")
   if (options?.showFavoriteOnly) params.set("showFavoriteOnly", "true")
@@ -37,14 +36,13 @@ export async function fetchLessonById(id: string): Promise<SavedLesson | null> {
 }
 
 export async function createLesson(
-  userId: string,
   lessonPlan: LessonPlan,
   requirements: LessonRequirements
 ): Promise<SavedLesson> {
   const res = await fetch(`${API_BASE}/lessons`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ userId, lessonPlan, requirements }),
+    body: JSON.stringify({ lessonPlan, requirements }),
   })
   if (!res.ok) throw new Error("Failed to create lesson")
 

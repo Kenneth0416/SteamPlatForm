@@ -333,7 +333,14 @@ export const useEditorStore = create<EditorState>((set, get) => {
         try {
           const parsed = JSON.parse(diff.newContent)
           const afterId = diff.blockId === '__start__' ? null : diff.blockId
-          const result = addBlock(newBlocks, afterId, parsed.type, parsed.content, parsed.level)
+          const result = addBlock(
+            newBlocks,
+            afterId,
+            parsed.type,
+            parsed.content,
+            parsed.level,
+            diff.newBlockId // pass pre-generated ID
+          )
           newBlocks = result.blocks
         } catch {
           continue

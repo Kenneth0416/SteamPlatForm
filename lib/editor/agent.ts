@@ -1,10 +1,10 @@
-import { ChatOpenAI } from '@langchain/openai'
-import { HumanMessage, AIMessage, SystemMessage, ToolMessage } from '@langchain/core/messages'
 import { BlockIndexService } from './block-index'
 import { ReadWriteGuard } from './tools/middleware'
 import { createEditorTools, ToolContext, createListDocumentsTool, createSwitchDocumentTool, MultiDocToolContext } from './tools'
 import { DocumentManager } from './document-manager'
 import { ToolTrace, detectStuck } from './agent/runtime'
+import { createLLMClient } from '@/lib/langchain/llm-factory'
+import { HumanMessage, AIMessage, SystemMessage, ToolMessage } from '@langchain/core/messages'
 import type { Block, PendingDiff, EditorDocument } from './types'
 
 const SYSTEM_PROMPT = `You are a document editing assistant. You help users modify their documents through natural language commands.
@@ -50,7 +50,22 @@ Available tools:
 - read_blocks: PREFERRED - Batch read blocks in ONE call (max 25)
 - edit_blocks: PREFERRED - Batch edit blocks in ONE call (max 25) - requires read_blocks first
 - add_blocks: PREFERRED - Batch add blocks in ONE call (max 25) - no prior read needed
-- delete_blocks: PREFERRED - Batch delete blocks in ONE call (max 25) - requires read_blocks first`
+  POSITIONING RULES:
+  - afterBlockId=null → appends to document END (use only when adding to end)
+  - afterBlockId=<existing block ID> → inserts AFTER that block (use for middle insertions)
+  - To insert at a specific location: first call list_blocks to find the target block ID
+  CHAINING MULTIPLE BLOCKS (when adding several blocks together):
+  - First block: afterBlockId=<target position block ID> (or null for end)
+  - Second block: afterBlockId=<first block's newBlockId from result>
+  - Third block: afterBlockId=<second block's newBlockId from result>
+  COMMON MISTAKE: Using afterBlockId=null for every block → all blocks go to end separately!
+- delete_blocks: PREFERRED - Batch delete blocks in ONE call (max 25) - requires read_blocks first
+
+RESPONSE STYLE (CRITICAL):
+- Keep responses concise: 2-5 sentences maximum
+- Only state what was changed, not detailed explanations of how
+- No verbose summaries, bullet lists, or step-by-step recaps unless user explicitly asks
+- For read-only queries, answer directly without preamble`
 
 const MULTI_DOC_SYSTEM_PROMPT = `You are a document editing assistant that can work with multiple documents.
 
@@ -80,23 +95,6 @@ Available tools:
 - add_blocks: PREFERRED - Batch add blocks in ONE call (max 25) - no prior read needed
 - delete_blocks: PREFERRED - Batch delete blocks in ONE call (max 25) - requires read_blocks first`
 
-function createLLMClient() {
-  const apiKey = process.env.DEEPSEEK_API_KEY
-  if (!apiKey) {
-    throw new Error('DEEPSEEK_API_KEY is not set')
-  }
-
-  return new ChatOpenAI({
-    model: process.env.DEEPSEEK_MODEL || 'deepseek-chat',
-    apiKey,
-    configuration: {
-      baseURL: process.env.DEEPSEEK_BASE_URL || 'https://api.deepseek.com/v1',
-    },
-    temperature: 0.2,
-    maxTokens: 8192,
-  })
-}
-
 export interface EditorAgentResult {
   response: string
   pendingDiffs: PendingDiff[]
@@ -118,7 +116,7 @@ export async function runEditorAgent(
   }
 
   const tools = createEditorTools(ctx)
-  const llm = createLLMClient()
+  const llm = createLLMClient("documentEditing")
 
   // Bind tools to the model
   const llmWithTools = llm.bindTools(tools)
@@ -249,7 +247,7 @@ export async function* runEditorAgentStream(
   }
 
   const tools = createEditorTools(ctx)
-  const llm = createLLMClient()
+  const llm = createLLMClient("documentEditing")
   const llmWithTools = llm.bindTools(tools)
 
   const messages: (SystemMessage | HumanMessage | AIMessage | ToolMessage)[] = [

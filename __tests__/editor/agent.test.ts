@@ -210,8 +210,8 @@ describe('Error Recovery', () => {
       const readInDocBParsed = JSON.parse(readInDocBResult as string)
       expect(readInDocBParsed.blocks[0].ok).toBe(true)
 
-      // Step 7: Edit block in doc_B
-      const editSuccessResult = await editBlocksTool!.func!({
+      // Step 7: Edit block in doc_B (using toolsB context)
+      const editSuccessResult = await editBlocksToolB!.func!({
         edits: [{ blockId: 'docB_block_1', newContent: 'Updated Doc B content', reason: 'Testing recovery' }]
       })
       const editSuccessParsed = JSON.parse(editSuccessResult as string)

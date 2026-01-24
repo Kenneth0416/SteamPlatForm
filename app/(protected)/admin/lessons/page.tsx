@@ -111,7 +111,7 @@ export default function LessonsManagement() {
                   <TableCell>{lesson.requirements?.gradeLevel || "-"}</TableCell>
                   <TableCell>
                     <div className="flex gap-1">
-                      {lesson.requirements?.steamDomains?.map((domain) => (
+                      {lesson.requirements?.steamDomains?.map((domain: string) => (
                         <Badge key={domain} variant="outline">
                           {domain}
                         </Badge>

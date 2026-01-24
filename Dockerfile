@@ -6,8 +6,8 @@ FROM node:20-alpine AS base
 # 安装 pnpm
 RUN corepack enable && corepack prepare pnpm@10.28.1 --activate
 
-# 安装 OpenSSL（Prisma 依赖）、wget（健康检查）、postgresql-client（数据库检查）和 su-exec（用户切换）
-RUN apk add --no-cache libc6-compat openssl wget postgresql-client su-exec
+# 安装 OpenSSL（Prisma 依赖）、wget（健康检查）、postgresql-client（数据库检查）
+RUN apk add --no-cache libc6-compat openssl wget postgresql-client
 
 
 # ==========================================
@@ -64,11 +64,13 @@ COPY --from=builder /app/public ./public
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
 
-# 复制 Prisma 相关文件
+# 复制 Prisma schema、package.json 和 pnpm-lock.yaml（用于安装依赖）
 COPY --from=builder /app/prisma ./prisma
-# 复制完整的 Prisma 客户端（包括 query_compiler_fast_bg.js）
-COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
-COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
+COPY --from=builder /app/package.json ./package.json
+COPY --from=builder /app/pnpm-lock.yaml ./pnpm-lock.yaml
+
+# 安装依赖（包含 Prisma CLI）并生成 Prisma Client
+RUN pnpm install --frozen-lockfile --ignore-scripts && pnpm exec prisma generate
 
 # 复制启动脚本
 COPY scripts/docker-entrypoint.sh ./
@@ -82,5 +84,7 @@ ENV HOSTNAME="0.0.0.0"
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
   CMD node -e "require('http').get('http://localhost:3030/api/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"
 
-# 以 root 运行入口脚本（脚本内部会切换用户）
+# 以 nextjs 用户运行
+USER nextjs
+
 ENTRYPOINT ["./docker-entrypoint.sh"]

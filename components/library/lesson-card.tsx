@@ -51,15 +51,15 @@ export function LessonCard({
           </Button>
         </div>
         <CardDescription>
-          {t.gradeLevels[lesson.requirements.gradeLevel]} • {lesson.requirements.numberOfSessions}{' '}
+          {t.gradeLevels[lesson.requirements.gradeLevel as keyof typeof t.gradeLevels]} • {lesson.requirements.numberOfSessions}{' '}
           {t.library.sessions} × {lesson.requirements.durationPerSession} {t.library.minutes}
         </CardDescription>
       </CardHeader>
       <CardContent>
         <div className="flex flex-wrap gap-2 mb-4">
-          {lesson.requirements.steamDomains.map((domain) => (
+          {lesson.requirements.steamDomains.map((domain: string) => (
             <Badge key={domain} variant="secondary">
-              {t.domains[domain]}
+              {t.domains[domain as keyof typeof t.domains]}
             </Badge>
           ))}
         </div>

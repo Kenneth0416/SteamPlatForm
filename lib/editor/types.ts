@@ -20,6 +20,7 @@ export interface BlockSummary {
 export interface PendingDiff {
   id: string
   blockId: string
+  newBlockId?: string // for add operations, stores the pre-generated block ID
   action: 'update' | 'add' | 'delete'
   oldContent: string
   newContent: string

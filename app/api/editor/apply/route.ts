@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createVersion, recordEdit } from '@/lib/editor/version'
-import type { Block } from '@/lib/editor/types'
 import { auth } from '@/lib/auth'
+import { verifyLessonOwnership } from '@/lib/api-utils'
+import type { Block } from '@/lib/editor/types'
 
 export async function POST(request: NextRequest) {
   const session = await auth()
@@ -17,6 +18,12 @@ export async function POST(request: NextRequest) {
         { error: 'lessonId and blocks are required' },
         { status: 400 }
       )
+    }
+
+    // 驗證所有權
+    const ownership = await verifyLessonOwnership(lessonId, session.user.id)
+    if (!ownership.owned) {
+      return ownership.error as unknown as NextResponse
     }
 
     // Create version snapshot
@@ -45,7 +52,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('Apply error:', error)
     return NextResponse.json(
-      { error: 'Failed to apply changes' },
+      { error: process.env.NODE_ENV === 'development' ? (error as Error).message : 'Failed to apply changes' },
       { status: 500 }
     )
   }

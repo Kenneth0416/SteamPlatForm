@@ -1,31 +1,16 @@
-import { ChatOpenAI } from "@langchain/openai"
 import { StringOutputParser } from "@langchain/core/output_parsers"
 import { getLessonPrompt, getChatPrompt } from "./prompts"
+import { createLLMClient } from "./llm-factory"
+import { withRetry } from "./retry"
 import type { LessonRequirements } from "@/types/lesson"
 
-function createDeepSeekClient() {
-  const apiKey = process.env.DEEPSEEK_API_KEY
-  if (!apiKey) {
-    throw new Error("DEEPSEEK_API_KEY is not set")
-  }
-
-  return new ChatOpenAI({
-    model: process.env.DEEPSEEK_MODEL || "deepseek-chat",
-    apiKey: apiKey,
-    configuration: {
-      baseURL: process.env.DEEPSEEK_BASE_URL || "https://api.deepseek.com/v1",
-    },
-    temperature: 0.7,
-    maxTokens: 4096,
-  })
-}
-
 export async function generateLesson(requirements: LessonRequirements, lang: "en" | "zh" = "en"): Promise<string> {
-  const llm = createDeepSeekClient()
-  const prompt = getLessonPrompt(lang)
-  const chain = prompt.pipe(llm).pipe(new StringOutputParser())
+  return withRetry(async () => {
+    const llm = createLLMClient("lessonGeneration")
+    const prompt = getLessonPrompt(lang)
+    const chain = prompt.pipe(llm).pipe(new StringOutputParser())
 
-  const result = await chain.invoke({
+    return await chain.invoke({
     lessonTopic: requirements.lessonTopic || (lang === "zh" ? "STEAM 專題" : "STEAM Project"),
     gradeLevel: requirements.gradeLevel,
     numberOfSessions: requirements.numberOfSessions.toString(),
@@ -40,12 +25,11 @@ export async function generateLesson(requirements: LessonRequirements, lang: "en
     runName: "generate-lesson",
     metadata: { lang, topic: requirements.lessonTopic },
   })
-
-  return result
+  })
 }
 
 export async function* generateLessonStream(requirements: LessonRequirements, lang: "en" | "zh" = "en"): AsyncGenerator<string> {
-  const llm = createDeepSeekClient()
+  const llm = createLLMClient("lessonGeneration")
   const prompt = getLessonPrompt(lang)
   const chain = prompt.pipe(llm)
 
@@ -82,7 +66,7 @@ export async function* chatWithLessonStream(
   currentLesson: string,
   lang: "en" | "zh" = "en"
 ): AsyncGenerator<ChatStreamChunk> {
-  const llm = createDeepSeekClient()
+  const llm = createLLMClient("chatCompletion")
   const prompt = getChatPrompt(lang)
   const chain = prompt.pipe(llm)
 
@@ -118,11 +102,12 @@ export async function chatWithLesson(
   currentLesson: string,
   lang: "en" | "zh" = "en"
 ): Promise<{ reply: string; suggestedChange?: string }> {
-  const llm = createDeepSeekClient()
-  const prompt = getChatPrompt(lang)
-  const chain = prompt.pipe(llm).pipe(new StringOutputParser())
+  return withRetry(async () => {
+    const llm = createLLMClient("chatCompletion")
+    const prompt = getChatPrompt(lang)
+    const chain = prompt.pipe(llm).pipe(new StringOutputParser())
 
-  const result = await chain.invoke({
+    const result = await chain.invoke({
     currentLesson,
     userMessage,
   }, {
@@ -138,4 +123,5 @@ export async function chatWithLesson(
     reply,
     suggestedChange: needsChange ? "true" : undefined,
   }
+  })
 }

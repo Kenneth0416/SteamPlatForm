@@ -47,14 +47,15 @@ export async function POST(request: NextRequest) {
               afterId,
               parsed.type || 'paragraph',
               parsed.content || '',
-              parsed.level
+              parsed.level,
+              diff.newBlockId // Pass the pre-generated ID for chaining support
             )
             blocks = addResult.blocks
             appliedChanges.push(`Added new ${parsed.type || 'paragraph'} block`)
           } catch {
             // Fallback: treat newContent as plain text
             const afterId = diff.blockId === '__start__' ? null : diff.blockId
-            const addResult = addBlock(blocks, afterId, 'paragraph', diff.newContent || '')
+            const addResult = addBlock(blocks, afterId, 'paragraph', diff.newContent || '', undefined, diff.newBlockId)
             blocks = addResult.blocks
             appliedChanges.push(`Added new block`)
           }

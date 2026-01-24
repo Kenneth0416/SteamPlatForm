@@ -189,10 +189,11 @@ export function addBlock(
   afterBlockId: string | null,
   type: BlockType,
   content: string,
-  level?: number
+  level?: number,
+  providedId?: string // accept pre-generated ID
 ): { blocks: Block[]; newBlock: Block } {
   const newBlock: Block = {
-    id: generateBlockId(),
+    id: providedId || generateBlockId(), // use provided ID or generate new
     type,
     content,
     order: 0,
@@ -200,8 +201,8 @@ export function addBlock(
   }
 
   if (!afterBlockId) {
-    // Insert at beginning
-    const updated = [newBlock, ...blocks]
+    // Insert at end
+    const updated = [...blocks, newBlock]
     updated.forEach((b, i) => { b.order = i })
     return { blocks: updated, newBlock }
   }

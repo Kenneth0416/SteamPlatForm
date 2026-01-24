@@ -6,12 +6,17 @@ datasource db {
   provider = "postgresql"
 }
 
+enum UserRole {
+  USER
+  ADMIN
+}
+
 model User {
   id        String   @id @default(cuid())
   email     String   @unique
   name      String
   password  String
-  role      String   @default("user")
+  role      UserRole @default(USER)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   lessons   Lesson[]
@@ -37,6 +42,9 @@ model Lesson {
   editorDocuments EditorDocument[]
 
   @@index([userId])
+  @@index([userId, isArchived, updatedAt])  // Optimized: filter by archived, sort by updated
+  @@index([userId, isFavorite])             // Optimized: filter favorites
+  @@index([userId, isArchived, isFavorite]) // Optimized: filter archived + favorites
 }
 
 model DocumentBlock {

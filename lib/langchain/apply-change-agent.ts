@@ -1,6 +1,7 @@
-import { ChatOpenAI } from "@langchain/openai"
 import { StringOutputParser } from "@langchain/core/output_parsers"
 import { ChatPromptTemplate } from "@langchain/core/prompts"
+import { createLLMClient } from "./llm-factory"
+import { withRetry } from "./retry"
 
 type EditOperation =
   | { action: "replace"; old_text: string; new_text: string }
@@ -13,27 +14,10 @@ interface EditResult {
   summary?: string
 }
 
-function createDeepSeekClient() {
-  const apiKey = process.env.DEEPSEEK_API_KEY
-  if (!apiKey) {
-    throw new Error("DEEPSEEK_API_KEY is not set")
-  }
-
-  return new ChatOpenAI({
-    model: process.env.DEEPSEEK_MODEL || "deepseek-chat",
-    apiKey: apiKey,
-    configuration: {
-      baseURL: process.env.DEEPSEEK_BASE_URL || "https://api.deepseek.com/v1",
-    },
-    temperature: 0.2,
-  })
-}
+const MAX_LESSON_LENGTH = 50000
+const MAX_CHANGE_LENGTH = 10000
 
 const EDIT_PROMPT_EN = `Return JSON only.
-DOC:
-{currentLesson}
-REQ:
-{suggestedChange}
 
 Output: {{"changes":[...]}}
 - replace: {{"action":"replace","old_text":"<exact substring>","new_text":"..."}}
@@ -52,9 +36,6 @@ const EDIT_PROMPT_ZH = `只輸出 JSON（不要 markdown）。
 - delete: {{"action":"delete","old_text":"<文檔精確片段>"}}
 - insert_after/before: {{"action":"insert_after","anchor":"<文檔精確片段>","new_text":"..."}}
 規則：old_text/anchor 必須直接從文檔複製；修改最小化；片段需足夠唯一。`
-
-const MAX_LESSON_LENGTH = 50000
-const MAX_CHANGE_LENGTH = 10000
 
 function replaceAll(str: string, search: string, replace: string): string {
   return str.split(search).join(replace)
@@ -169,14 +150,15 @@ export async function applyChangeWithLLM(
   suggestedChange: string,
   lang: "en" | "zh" = "en"
 ): Promise<{ updatedLesson: string; summary: string }> {
-  if (currentLesson.length > MAX_LESSON_LENGTH) {
-    throw new Error(`Lesson exceeds maximum length of ${MAX_LESSON_LENGTH} characters`)
-  }
-  if (suggestedChange.length > MAX_CHANGE_LENGTH) {
-    throw new Error(`Change request exceeds maximum length of ${MAX_CHANGE_LENGTH} characters`)
-  }
+  return withRetry(async () => {
+    if (currentLesson.length > MAX_LESSON_LENGTH) {
+      throw new Error(`Lesson exceeds maximum length of ${MAX_LESSON_LENGTH} characters`)
+    }
+    if (suggestedChange.length > MAX_CHANGE_LENGTH) {
+      throw new Error(`Change request exceeds maximum length of ${MAX_CHANGE_LENGTH} characters`)
+    }
 
-  const llm = createDeepSeekClient()
+    const llm = createLLMClient("documentEditing")
 
   const prompt = ChatPromptTemplate.fromMessages([
     ["system", lang === "zh" ? EDIT_PROMPT_ZH : EDIT_PROMPT_EN],
@@ -209,4 +191,5 @@ export async function applyChangeWithLLM(
     updatedLesson: currentLesson,
     summary: lang === "zh" ? "無法解析修改指令" : "Could not parse edit instructions"
   }
+  })
 }
