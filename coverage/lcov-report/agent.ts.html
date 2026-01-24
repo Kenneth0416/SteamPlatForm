@@ -588,7 +588,32 @@
 <a name='L523'></a><a href='#L523'>523</a>
 <a name='L524'></a><a href='#L524'>524</a>
 <a name='L525'></a><a href='#L525'>525</a>
-<a name='L526'></a><a href='#L526'>526</a></td><td class="line-coverage quiet"><span class="cline-any cline-no">&nbsp;</span>
+<a name='L526'></a><a href='#L526'>526</a>
+<a name='L527'></a><a href='#L527'>527</a>
+<a name='L528'></a><a href='#L528'>528</a>
+<a name='L529'></a><a href='#L529'>529</a>
+<a name='L530'></a><a href='#L530'>530</a>
+<a name='L531'></a><a href='#L531'>531</a>
+<a name='L532'></a><a href='#L532'>532</a>
+<a name='L533'></a><a href='#L533'>533</a>
+<a name='L534'></a><a href='#L534'>534</a>
+<a name='L535'></a><a href='#L535'>535</a>
+<a name='L536'></a><a href='#L536'>536</a>
+<a name='L537'></a><a href='#L537'>537</a>
+<a name='L538'></a><a href='#L538'>538</a>
+<a name='L539'></a><a href='#L539'>539</a>
+<a name='L540'></a><a href='#L540'>540</a>
+<a name='L541'></a><a href='#L541'>541</a>
+<a name='L542'></a><a href='#L542'>542</a>
+<a name='L543'></a><a href='#L543'>543</a>
+<a name='L544'></a><a href='#L544'>544</a>
+<a name='L545'></a><a href='#L545'>545</a>
+<a name='L546'></a><a href='#L546'>546</a>
+<a name='L547'></a><a href='#L547'>547</a>
+<a name='L548'></a><a href='#L548'>548</a>
+<a name='L549'></a><a href='#L549'>549</a>
+<a name='L550'></a><a href='#L550'>550</a>
+<a name='L551'></a><a href='#L551'>551</a></td><td class="line-coverage quiet"><span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
@@ -623,7 +648,32 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -1128,11 +1178,23 @@ EFFICIENCY RULES (CRITICAL):
 1. MINIMIZE tool calls - plan ALL operations upfront, execute in ONE batch
 2. After list_blocks, you should know exactly which blocks to read/edit - do it in ONE call
 3. Maximum 3 tool calls per request: list_blocks → read_blocks → edit_blocks
+4. Batch ALL add/delete operations in ONE call
+5. For large documents (&gt;50 blocks):
+   - Read only blocks you plan to edit (not entire document)
+   - Use withContext=false to reduce tokens
+   - Split into multiple batches if absolutely necessary (but prefer one)
+6. MAX 30 iterations - plan carefully to avoid loops
+7. If stuck after 3 attempts, ask user for clarification instead of repeating
 &nbsp;
 WORKFLOW (follow strictly):
 1. list_blocks - get document structure (REQUIRED first step)
-2. read_blocks - read ALL relevant blocks in ONE call (skip if list_blocks preview is enough)
-3. edit_blocks - make ALL edits in ONE call
+2. read_blocks - read ALL relevant blocks in ONE call
+   - SKIP only for read-only queries about document structure
+   - ALWAYS read before editing/deleting for full context
+3. Execute operations in ONE batch:
+   - Use edit_blocks for modifications
+   - Use add_blocks for insertions (max 25)
+   - Use delete_blocks for removals (max 25)
 4. Respond with summary
 &nbsp;
 RULES:
@@ -1141,19 +1203,27 @@ RULES:
 - STOP when you have enough info - don't over-read
 - Never add empty headings or duplicate content
 &nbsp;
+ERROR HANDLING:
+- If tool fails, READ the error message carefully
+- "Block not found" → call list_blocks to refresh document state
+- "not read yet" → call read_blocks before retrying
+- "already deleted" → skip that block and continue
+- Never retry the same operation 3+ times (prevents infinite loops)
+&nbsp;
 Available tools:
 - list_blocks: See document structure with previews (call first)
-- read_blocks: Batch read blocks (max 25)
-- edit_blocks: Batch edit blocks (max 25)
-- add_block: Add a new block
-- delete_block: Remove a block`
+- read_blocks: PREFERRED - Batch read blocks in ONE call (max 25)
+- edit_blocks: PREFERRED - Batch edit blocks in ONE call (max 25) - requires read_blocks first
+- add_blocks: PREFERRED - Batch add blocks in ONE call (max 25) - no prior read needed
+- delete_blocks: PREFERRED - Batch delete blocks in ONE call (max 25) - requires read_blocks first`
 &nbsp;
 const MULTI_DOC_SYSTEM_PROMPT = <span class="cstat-no" title="statement not covered" >`You are a document editing assistant that can work with multiple documents.</span>
 &nbsp;
 MULTI-DOCUMENT WORKFLOW:
 1. list_documents - see all open documents (call first if user mentions multiple docs)
 2. switch_document(docId) - switch to target document
-3. list_blocks → read_blocks → edit_blocks (operate on current document)
+⚠️ CRITICAL: switch_document RESETS read guards - call list_blocks again after switching
+3. list_blocks → read_blocks → edit_blocks/add_blocks/delete_blocks (operate on active document)
 &nbsp;
 RULES:
 - Always confirm which document you're editing
@@ -1162,13 +1232,18 @@ RULES:
 &nbsp;
 EFFICIENCY RULES (CRITICAL):
 1. MINIMIZE tool calls - plan ALL operations upfront
-2. Use batch operations: read_blocks, edit_blocks
-3. Maximum 4 tool calls: list_documents → switch_document → list_blocks → edit_blocks
+2. Use batch operations: read_blocks, edit_blocks, add_blocks, delete_blocks
+3. Batch ALL add/delete operations in ONE call
+4. Maximum 4 tool calls: list_documents → switch_document → list_blocks → edit_blocks
 &nbsp;
 Available tools:
 - list_documents: See all open documents
 - switch_document: Switch active document
-- list_blocks, read_blocks, edit_blocks, add_block, delete_block (operate on active document)`
+- list_blocks: See document structure with previews (call first)
+- read_blocks: PREFERRED - Batch read blocks in ONE call (max 25)
+- edit_blocks: PREFERRED - Batch edit blocks in ONE call (max 25) - requires read_blocks first
+- add_blocks: PREFERRED - Batch add blocks in ONE call (max 25) - no prior read needed
+- delete_blocks: PREFERRED - Batch delete blocks in ONE call (max 25) - requires read_blocks first`
 &nbsp;
 function <span class="fstat-no" title="function not covered" >createLLMClient() {</span>
   const apiKey = <span class="cstat-no" title="statement not covered" >process.env.DEEPSEEK_API_KEY</span>
@@ -1645,7 +1720,7 @@ export async function* <span class="cstat-no" title="statement not covered" ><sp
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2026-01-19T09:28:04.210Z
+                at 2026-01-21T10:29:42.236Z
             </div>
         <script src="prettify.js"></script>
         <script>
