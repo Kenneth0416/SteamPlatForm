@@ -5,6 +5,7 @@ import { Pool } from 'pg'
 const globalForPrisma = globalThis as unknown as { prisma: PrismaClient }
 
 const isDevelopment = process.env.NODE_ENV !== 'production'
+const isVercel = !!process.env.VERCEL
 
 function createPrismaClient() {
   if (isDevelopment) {
@@ -13,6 +14,13 @@ function createPrismaClient() {
     console.log('[PRISMA] DATABASE_URL exists:', !!dbUrl)
   }
 
+  // Vercel serverless 环境不使用连接池
+  if (isVercel) {
+    console.log('[PRISMA] Vercel detected: using direct Prisma Client (no connection pool)')
+    return new PrismaClient()
+  }
+
+  // 本地开发环境使用连接池优化
   const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
     max: isDevelopment ? 10 : 20,
