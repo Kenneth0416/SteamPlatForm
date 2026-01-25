@@ -1,0 +1,51 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: steam-lesson-db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: steam_lesson
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - steam-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  app:
+    image: ${DOCKER_IMAGE:-ghcr.io/kenneth0416/steam-platform:latest}
+    container_name: steam-lesson-app
+    ports:
+      - "${APP_PORT:-3030}:3030"
+    environment:
+      - DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD:-postgres}@postgres:5432/steam_lesson?schema=public
+      - NEXTAUTH_SECRET=${NEXTAUTH_SECRET}
+      - NEXTAUTH_URL=${NEXTAUTH_URL:-http://localhost:3030}
+      - AUTH_TRUST_HOST=${AUTH_TRUST_HOST:-true}
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
+      - DEEPSEEK_MODEL=${DEEPSEEK_MODEL:-deepseek-chat}
+      - DEEPSEEK_BASE_URL=${DEEPSEEK_BASE_URL:-https://api.deepseek.com}
+      - NODE_ENV=production
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - steam-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:3030/api/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      start_period: 60s
+      retries: 3
+
+networks:
+  steam-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
