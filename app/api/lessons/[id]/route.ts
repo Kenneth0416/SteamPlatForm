@@ -2,22 +2,14 @@ import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { auth } from "@/lib/auth"
 
-const requireAuth = async () => {
-  const session = await auth()
-  if (!session?.user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  }
-  return session
-}
-
 // GET /api/lessons/[id] - 獲取單個課程
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const session = await requireAuth()
+  const session = await auth()
   if (!session?.user) {
-    return session as unknown as NextResponse
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 
   try {
@@ -54,9 +46,10 @@ export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const session = await requireAuth()
+  const session = await auth()
   if (!session?.user) {
-    return session as unknown as NextResponse
+    console.error('[LESSON_API] Update failed: Unauthorized')
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 
   try {
@@ -64,27 +57,52 @@ export async function PUT(
     const body = await request.json()
     const { markdown, requirements, tags, isFavorite, isArchived, title, chatHistory } = body
 
+    console.log('[LESSON_API] Update request:', {
+      lessonId: id,
+      userId: session.user.id,
+      hasMarkdown: !!markdown,
+      hasRequirements: !!requirements,
+      hasTitle: !!title,
+    })
+
     // 驗證所有權
     const existing = await prisma.lesson.findFirst({
       where: { id, userId: session.user.id },
     })
 
     if (!existing) {
+      console.error('[LESSON_API] Update failed: Lesson not found or access denied', {
+        lessonId: id,
+        userId: session.user.id,
+      })
       return NextResponse.json({ error: "Lesson not found" }, { status: 404 })
     }
 
     // Only update title if explicitly provided (don't auto-extract from markdown on update)
+    const updateData: any = {
+      ...(markdown && { lessonPlan: { markdown } }),
+      ...(title && { title }),
+      ...(requirements && { requirements }),
+      ...(chatHistory !== undefined && { chatHistory }),
+      ...(tags !== undefined && { tags }),
+      ...(isFavorite !== undefined && { isFavorite }),
+      ...(isArchived !== undefined && { isArchived }),
+    }
+
+    console.log('[LESSON_API] Updating lesson with data:', {
+      lessonId: id,
+      fields: Object.keys(updateData),
+    })
+
     const lesson = await prisma.lesson.update({
       where: { id },
-      data: {
-        ...(markdown && { lessonPlan: { markdown } }),
-        ...(title && { title }),
-        ...(requirements && { requirements }),
-        ...(chatHistory !== undefined && { chatHistory }),
-        ...(tags !== undefined && { tags }),
-        ...(isFavorite !== undefined && { isFavorite }),
-        ...(isArchived !== undefined && { isArchived }),
-      },
+      data: updateData,
+    })
+
+    console.log('[LESSON_API] Update successful:', {
+      lessonId: id,
+      userId: lesson.userId,
+      updatedAt: lesson.updatedAt,
     })
 
     return NextResponse.json({
@@ -95,7 +113,10 @@ export async function PUT(
       }
     })
   } catch (error) {
-    console.error("Error updating lesson:", error)
+    console.error('[LESSON_API] Update error:', {
+      error: (error as Error).message,
+      stack: (error as Error).stack,
+    })
     return NextResponse.json(
       { error: process.env.NODE_ENV === "development" ? (error as Error).message : "Failed to update lesson" },
       { status: 500 }
@@ -108,9 +129,9 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const session = await requireAuth()
+  const session = await auth()
   if (!session?.user) {
-    return session as unknown as NextResponse
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 
   try {

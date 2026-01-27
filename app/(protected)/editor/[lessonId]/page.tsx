@@ -119,11 +119,14 @@ export default function EditorPage({ params }: PageProps) {
         }),
       })
 
-      // Update lesson
+      // Update lesson - 使用 PUT 方法（API 不支持 PATCH）
       await fetch(`/api/lessons/${lessonId}`, {
-        method: 'PATCH',
+        method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ lessonPlan: markdown }),
+        body: JSON.stringify({
+          markdown,  // 使用 markdown 而不是 lessonPlan
+          lessonPlan: { markdown }  // 兼容旧格式
+        }),
       })
 
       toast.success('Saved successfully')

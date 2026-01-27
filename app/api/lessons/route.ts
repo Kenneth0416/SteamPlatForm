@@ -2,19 +2,11 @@ import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { auth } from "@/lib/auth"
 
-const requireAuth = async () => {
+// GET /api/lessons - 獲取用戶的所有課程
+export async function GET(request: NextRequest) {
   const session = await auth()
   if (!session?.user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  }
-  return session
-}
-
-// GET /api/lessons - 獲取用戶的所有課程
-export async function GET(request: NextRequest) {
-  const session = await requireAuth()
-  if (!session?.user) {
-    return session as unknown as NextResponse
   }
 
   try {
@@ -27,6 +19,14 @@ export async function GET(request: NextRequest) {
     const gradeLevels = searchParams.get("gradeLevels")
     const domains = searchParams.get("domains")
     const tags = searchParams.get("tags")
+
+    // 安全：驗證搜索參數長度
+    if (search && search.length > 100) {
+      return NextResponse.json({ error: "Search query too long (max 100 characters)" }, { status: 400 })
+    }
+    if (tags && tags.length > 500) {
+      return NextResponse.json({ error: "Tags filter too long" }, { status: 400 })
+    }
 
     const lessons = await prisma.lesson.findMany({
       where: {
@@ -80,16 +80,25 @@ export async function GET(request: NextRequest) {
 
 // POST /api/lessons - 創建新課程
 export async function POST(request: NextRequest) {
-  const session = await requireAuth()
+  const session = await auth()
   if (!session?.user) {
-    return session as unknown as NextResponse
+    console.error('[LESSON_API] Create failed: Unauthorized')
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 
   try {
     const body = await request.json()
     const { title, markdown, requirements } = body
 
+    console.log('[LESSON_API] Create request:', {
+      userId: session.user.id,
+      hasTitle: !!title,
+      hasMarkdown: !!markdown,
+      hasRequirements: !!requirements,
+    })
+
     if (!markdown || !requirements) {
+      console.error('[LESSON_API] Create failed: Missing required fields')
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 })
     }
 
@@ -102,6 +111,12 @@ export async function POST(request: NextRequest) {
       },
     })
 
+    console.log('[LESSON_API] Create successful:', {
+      lessonId: lesson.id,
+      userId: lesson.userId,
+      createdAt: lesson.createdAt,
+    })
+
     // Transform response to include markdown at top level
     return NextResponse.json({
       lesson: {
@@ -110,7 +125,10 @@ export async function POST(request: NextRequest) {
       }
     })
   } catch (error) {
-    console.error("Error creating lesson:", error)
+    console.error('[LESSON_API] Create error:', {
+      error: (error as Error).message,
+      stack: (error as Error).stack,
+    })
     return NextResponse.json(
       { error: process.env.NODE_ENV === "development" ? (error as Error).message : "Failed to create lesson" },
       { status: 500 }
