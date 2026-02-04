@@ -3,18 +3,10 @@ import { getVersions, getVersion, restoreVersion, getEditHistory } from '@/lib/e
 import { auth } from '@/lib/auth'
 import { verifyLessonOwnership } from '@/lib/api-utils'
 
-const requireAuth = async () => {
+export async function GET(request: NextRequest) {
   const session = await auth()
   if (!session?.user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
-  return session
-}
-
-export async function GET(request: NextRequest) {
-  const session = await requireAuth()
-  if (!session?.user) {
-    return session as unknown as NextResponse
   }
 
   const { searchParams } = new URL(request.url)
@@ -64,9 +56,9 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const session = await requireAuth()
+  const session = await auth()
   if (!session?.user) {
-    return session as unknown as NextResponse
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
   try {

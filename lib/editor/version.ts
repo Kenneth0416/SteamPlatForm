@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma'
 import type { Block } from './types'
+import type { Prisma } from '@prisma/client'
 
 export async function createVersion(
   lessonId: string,
@@ -21,7 +22,7 @@ export async function createVersion(
       data: {
         lessonId,
         version: nextVersion,
-        snapshot: blocks,
+        snapshot: blocks as unknown as Prisma.InputJsonValue,
         summary,
       },
     })

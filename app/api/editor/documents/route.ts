@@ -7,18 +7,10 @@ import type { Prisma } from '@prisma/client'
 
 type EditorDocumentRow = Prisma.EditorDocumentGetPayload<{}>
 
-const requireAuth = async () => {
+export async function GET(req: NextRequest) {
   const session = await auth()
   if (!session?.user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
-  return session
-}
-
-export async function GET(req: NextRequest) {
-  const session = await requireAuth()
-  if (!session?.user) {
-    return session as unknown as NextResponse
   }
 
   const lessonId = req.nextUrl.searchParams.get('lessonId')
@@ -51,9 +43,9 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const session = await requireAuth()
+  const session = await auth()
   if (!session?.user) {
-    return session as unknown as NextResponse
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
   const body = await req.json()
@@ -96,9 +88,9 @@ export async function POST(req: NextRequest) {
 }
 
 export async function PUT(req: NextRequest) {
-  const session = await requireAuth()
+  const session = await auth()
   if (!session?.user) {
-    return session as unknown as NextResponse
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
   const body = await req.json()
@@ -143,9 +135,9 @@ export async function PUT(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
-  const session = await requireAuth()
+  const session = await auth()
   if (!session?.user) {
-    return session as unknown as NextResponse
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
   const id = req.nextUrl.searchParams.get('id')
