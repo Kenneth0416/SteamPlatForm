@@ -7,7 +7,7 @@ import { getTranslation } from "@/lib/translations"
 import { Card, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Send, Square, User, Bot, ArrowLeft, Loader2, ArrowDown, CheckCircle2, XCircle, Wrench } from "lucide-react"
+import { Send, Square, User, Bot, ArrowLeft, Loader2, ArrowDown, CheckCircle2, XCircle, Wrench, Edit3 } from "lucide-react"
 import { ChatMarkdown } from "./chat-markdown"
 
 interface ChatPanelProps {
@@ -43,7 +43,7 @@ export function ChatPanel({ lang, currentLesson, onLessonUpdate, onBackToForm, i
       <XCircle className="h-3 w-3 text-red-500" />
     )
     return (
-      <span className="inline-flex items-center gap-1.5 text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 px-2 py-1 rounded font-mono mr-1 mb-1">
+      <span className="inline-flex items-center gap-1.5 text-xs bg-blue-100 text-blue-700 px-2.5 py-1 rounded-full font-mono mr-1 mb-1">
         {statusIcon}
         {toolCall.name}
       </span>
@@ -188,9 +188,7 @@ export function ChatPanel({ lang, currentLesson, onLessonUpdate, onBackToForm, i
             try {
               const parsed = JSON.parse(data)
               if (parsed.type === "new_turn") {
-                // Capture current message ID before it changes
                 const currentMsgId = aiMessageId
-                // Finalize current message and create new one
                 const finalText = fullText.replace(/\[(NEEDS_CHANGE|NO_CHANGE)\]/g, "").trim()
                 const finalToolCalls = collectedToolCalls.length > 0 ? [...collectedToolCalls] : undefined
                 setMessages((prev) =>
@@ -200,7 +198,6 @@ export function ChatPanel({ lang, currentLesson, onLessonUpdate, onBackToForm, i
                       : m
                   )
                 )
-                // Reset for new turn
                 fullText = ""
                 collectedToolCalls = []
                 aiMessageId = `msg-${Date.now()}`
@@ -252,7 +249,6 @@ export function ChatPanel({ lang, currentLesson, onLessonUpdate, onBackToForm, i
                       : m
                   )
                 )
-                // Emit diffs to parent for preview highlighting
                 if (finalDiffs && onDiffsChange) {
                   onDiffsChange(finalDiffs as PendingDiff[])
                 }
@@ -361,22 +357,25 @@ export function ChatPanel({ lang, currentLesson, onLessonUpdate, onBackToForm, i
   }
 
   return (
-    <Card className="h-full flex flex-col overflow-hidden !gap-0 !py-0">
-      <CardHeader className="!px-4 !pt-4 !pb-4 flex flex-row items-center justify-between space-y-0 border-b">
-        <CardTitle>{t.chatTitle}</CardTitle>
+    <Card className="h-full flex flex-col overflow-hidden !gap-0 !py-0 rounded-2xl bg-white shadow-lg border-purple-100">
+      <CardHeader className="!px-4 !pt-4 !pb-3 flex flex-row items-center justify-between space-y-0 border-b border-purple-100">
+        <div className="flex items-center gap-2">
+          <Edit3 className="h-4 w-4 text-purple-600" />
+          <CardTitle className="text-purple-900">{t.chatTitle}</CardTitle>
+        </div>
         {onBackToForm && !isGenerating && (
-          <Button variant="ghost" size="sm" onClick={onBackToForm} className="h-8">
+          <Button variant="ghost" size="sm" onClick={onBackToForm} className="h-8 text-purple-600 hover:text-purple-700 hover:bg-purple-50">
             <ArrowLeft className="w-4 h-4 mr-1" />
             {t.backToEdit}
           </Button>
         )}
       </CardHeader>
 
-      <div ref={scrollRef} onScroll={handleScroll} className="flex-1 overflow-y-auto px-3 relative">
-        <div className="py-2 space-y-3">
+      <div ref={scrollRef} onScroll={handleScroll} className="flex-1 overflow-y-auto px-3 relative bg-purple-50/30">
+        <div className="py-3 space-y-4">
           {messages.length === 0 && !isGenerating && (
-            <div className="text-center text-sm text-muted-foreground py-8">
-              {lang === "en" ? "Start a conversation to refine your lesson plan" : "開始對話以優化您的課程計畫"}
+            <div className="text-center text-sm text-purple-400 py-8">
+              {lang === "en" ? "Ask to modify the lesson plan..." : "開始對話以優化您的課程計畫"}
             </div>
           )}
           {messages.map((message) => {
@@ -388,13 +387,13 @@ export function ChatPanel({ lang, currentLesson, onLessonUpdate, onBackToForm, i
                 }`}
               >
                 {message.role !== "user" && (
-                  <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
+                  <div className="flex-shrink-0 w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center">
                     {message.isThinking ? (
-                      <Wrench className="h-4 w-4 text-primary animate-pulse" />
+                      <Wrench className="h-4 w-4 text-purple-500 animate-pulse" />
                     ) : message.isCompleted ? (
-                      <CheckCircle2 className="h-4 w-4 text-green-500" />
+                      <CheckCircle2 className="h-4 w-4 text-purple-500" />
                     ) : (
-                      <Bot className="h-4 w-4 text-primary" />
+                      <Bot className="h-4 w-4 text-purple-600" />
                     )}
                   </div>
                 )}
@@ -404,14 +403,14 @@ export function ChatPanel({ lang, currentLesson, onLessonUpdate, onBackToForm, i
                   {/* Message content with tool calls */}
                   {(message.text || message.isThinking || message.isCompleted || (message.toolCalls && message.toolCalls.length > 0)) && (
                     <div
-                      className={`rounded-lg px-4 py-2 text-sm transition-opacity duration-150 ${
+                      className={`rounded-2xl px-4 py-2.5 text-sm transition-opacity duration-150 ${
                         message.role === "user"
-                          ? "bg-primary text-primary-foreground"
+                          ? "bg-amber-100 text-amber-900"
                           : message.isThinking
-                            ? "bg-muted/50 text-muted-foreground italic flex items-center gap-2"
+                            ? "bg-purple-50 text-purple-500 italic flex items-center gap-2"
                             : message.isCompleted
-                              ? "bg-muted/50 text-muted-foreground flex items-center gap-2"
-                              : "bg-muted"
+                              ? "bg-purple-50 text-purple-500 flex items-center gap-2"
+                              : "bg-purple-50 text-purple-900"
                       }`}
                     >
                       {message.isThinking && <Loader2 className="h-3 w-3 animate-spin" />}
@@ -433,8 +432,8 @@ export function ChatPanel({ lang, currentLesson, onLessonUpdate, onBackToForm, i
                   )}
                 </div>
                 {message.role === "user" && (
-                  <div className="flex-shrink-0 w-8 h-8 rounded-full bg-secondary flex items-center justify-center">
-                    <User className="h-4 w-4" />
+                  <div className="flex-shrink-0 w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center">
+                    <User className="h-4 w-4 text-amber-700" />
                   </div>
                 )}
               </div>
@@ -446,7 +445,7 @@ export function ChatPanel({ lang, currentLesson, onLessonUpdate, onBackToForm, i
           <Button
             size="icon"
             variant="secondary"
-            className="absolute bottom-4 right-4 rounded-full shadow-lg animate-in fade-in slide-in-from-bottom-2 duration-200"
+            className="absolute bottom-4 right-4 rounded-full shadow-lg animate-in fade-in slide-in-from-bottom-2 duration-200 bg-purple-100 hover:bg-purple-200 text-purple-700"
             onClick={() => scrollToBottom(true)}
           >
             <ArrowDown className="h-4 w-4" />
@@ -454,35 +453,33 @@ export function ChatPanel({ lang, currentLesson, onLessonUpdate, onBackToForm, i
         )}
       </div>
 
-      <div className="flex-shrink-0 border-t px-3 py-2 bg-background">
-        <div className="flex gap-2">
+      <div className="flex-shrink-0 border-t border-purple-100 px-3 py-3 bg-white">
+        <div className="flex gap-2 items-center">
           <Input
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && handleSend()}
-            placeholder={t.chatPlaceholder}
+            placeholder={lang === "en" ? "Ask to modify the lesson plan..." : "請輸入修改建議..."}
             disabled={isSending || !currentLesson || isGenerating}
-            className="h-9"
+            className="h-10 rounded-full border-purple-200 bg-white px-4 focus-visible:ring-purple-400"
           />
           {isSending ? (
             <Button
               onClick={handleCancel}
-              size="sm"
+              size="icon"
               variant="destructive"
-              className="h-9 px-3"
+              className="h-10 w-10 rounded-full shrink-0"
             >
-              <Square className="h-4 w-4 mr-1" />
-              {t.stop}
+              <Square className="h-4 w-4" />
             </Button>
           ) : (
             <Button
               onClick={handleSend}
               disabled={!inputValue.trim() || !currentLesson || isGenerating}
-              size="sm"
-              className="h-9 px-3"
+              size="icon"
+              className="h-10 w-10 rounded-full shrink-0 bg-gradient-to-r from-purple-600 to-pink-500 hover:from-purple-700 hover:to-pink-600 text-white shadow-md"
             >
-              <Send className="h-4 w-4 mr-1" />
-              {t.send}
+              <Send className="h-4 w-4" />
             </Button>
           )}
         </div>

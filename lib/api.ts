@@ -309,7 +309,7 @@ export async function duplicateLesson(id: string): Promise<SavedLesson | null> {
     const res = await fetch(`/api/lessons/${id}`)
     if (!res.ok) throw new Error("Failed to fetch lesson")
     const data = await res.json()
-    const result = await saveLesson(data.lesson.lessonPlan, data.lesson.requirements)
+    const result = await saveLesson(data.lesson.markdown, data.lesson.requirements)
     return result === 'auth_required' ? null : result
   } catch (error) {
     console.error("Error duplicating lesson:", error)

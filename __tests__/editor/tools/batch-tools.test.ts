@@ -1,5 +1,6 @@
 import { BlockIndexService } from '../../../lib/editor/block-index'
 import { ReadWriteGuard } from '../../../lib/editor/tools/middleware'
+import { ReadCache } from '../../../lib/editor/agent/runtime'
 import type { Block, PendingDiff } from '../../../lib/editor/types'
 
 // Mock langchain tools to avoid ReadableStream issues
@@ -35,7 +36,7 @@ function createTestContext(blocks: Block[]): ToolContext & { pendingDiffs: Pendi
   const blockIndex = new BlockIndexService(blocks)
   const guard = new ReadWriteGuard()
   const pendingDiffs: PendingDiff[] = []
-  return { blockIndex, guard, pendingDiffs }
+  return { blockIndex, guard, pendingDiffs, readCache: new ReadCache(), blockIdCounter: 0 }
 }
 
 describe('list_blocks tool', () => {

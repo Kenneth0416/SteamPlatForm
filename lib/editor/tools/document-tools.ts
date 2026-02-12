@@ -3,14 +3,16 @@ import { z } from 'zod'
 import { DocumentManager } from '../document-manager'
 import { BlockIndexService } from '../block-index'
 import { ReadWriteGuard } from './middleware'
-import type { PendingDiff } from '../types'
+import type { ReadCache } from '../agent/runtime'
+import type { PendingDiff, ToolContextState } from '../types'
 
-export interface MultiDocToolContext {
+export interface MultiDocToolContext extends ToolContextState {
   documentManager: DocumentManager
   blockIndex: BlockIndexService
   guard: ReadWriteGuard
   pendingDiffs: PendingDiff[]
   pendingDiffsByDoc: Map<string, PendingDiff[]>
+  readCache: ReadCache
   onDiffCreated?: (diff: PendingDiff) => void
   // Callback to update blockIndex when switching documents
   onDocumentSwitch?: (docId: string, blocks: import('../types').Block[]) => void
@@ -61,6 +63,7 @@ export function createSwitchDocumentTool(ctx: MultiDocToolContext) {
 
       // Reset guard for new document context
       ctx.guard.reset()
+      ctx.readCache.invalidate()
 
       // Update blockIndex to point to new document's blocks
       if (ctx.onDocumentSwitch) {

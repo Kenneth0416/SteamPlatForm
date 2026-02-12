@@ -2,6 +2,7 @@ import { DocumentManager } from '@/lib/editor/document-manager'
 import { BlockIndexService } from '@/lib/editor/block-index'
 import { ReadWriteGuard } from '@/lib/editor/tools/middleware'
 import { createListDocumentsTool, createSwitchDocumentTool, MultiDocToolContext } from '@/lib/editor/tools/document-tools'
+import { ReadCache } from '@/lib/editor/agent/runtime'
 import type { EditorDocument, Block, PendingDiff } from '@/lib/editor/types'
 
 // Mock parseMarkdown
@@ -37,6 +38,8 @@ describe('Document Tools', () => {
       guard: new ReadWriteGuard(),
       pendingDiffs,
       pendingDiffsByDoc,
+      readCache: new ReadCache(),
+      blockIdCounter: 0,
     }
   }
 
@@ -108,6 +111,20 @@ describe('Document Tools', () => {
 
       expect(ctx.guard.hasReadDocument()).toBe(false)
       expect(ctx.guard.hasReadBlock('block-1')).toBe(false)
+    })
+
+    it('should clear read cache on switch', async () => {
+      const docs = [
+        createTestDoc('doc-1', 'Lesson Plan'),
+        createTestDoc('doc-2', 'Teacher Guide'),
+      ]
+      const ctx = createContext(docs, 'doc-1')
+      ctx.readCache.set('cache-key', 'cached')
+
+      const tool = createSwitchDocumentTool(ctx)
+      await tool.func({ docId: 'doc-2' })
+
+      expect(ctx.readCache.size()).toBe(0)
     })
 
     it('should call onDocumentSwitch callback', async () => {

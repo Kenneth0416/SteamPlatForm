@@ -28,6 +28,10 @@ export interface PendingDiff {
   docId?: string // for multi-document support
 }
 
+export interface ToolContextState {
+  blockIdCounter: number
+}
+
 // Multi-document types
 export type DocumentType = 'lesson' | 'guide' | 'worksheet' | 'custom'
 

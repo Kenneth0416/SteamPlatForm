@@ -29,6 +29,7 @@ export default function LibraryPage() {
   const router = useRouter()
   const { data: session, status } = useSession()
   const [lang, setLang] = useState<Lang>("en")
+  const [inputValue, setInputValue] = useState("")
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedGrades, setSelectedGrades] = useState<GradeLevel[]>([])
   const [selectedDomains, setSelectedDomains] = useState<STEAMDomain[]>([])
@@ -42,6 +43,13 @@ export default function LibraryPage() {
   const [lessons, setLessons] = useState<SavedLesson[]>([])
 
   const t = getTranslation(lang)
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setSearchQuery(inputValue)
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [inputValue])
 
   useEffect(() => {
     loadLessons()
@@ -86,6 +94,7 @@ export default function LibraryPage() {
     setShowArchived(false)
     setSelectedTags([])
     setSearchQuery("")
+    setInputValue("")
   }
 
   const handleTagChange = (tag: string, checked: boolean) => {
@@ -130,30 +139,31 @@ export default function LibraryPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-[#f0e6ff] bg-bubbles">
       <Header lang={lang} onLangChange={setLang} title={t.library.title} showBackButton />
 
       <main className="container mx-auto px-4 py-6">
-        <div className="flex flex-col md:flex-row gap-6 mb-6">
+        <div className="flex flex-col md:flex-row gap-4 mb-6 items-center">
           <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 h-4 w-4 text-purple-400" />
             <Input
               placeholder={t.library.searchPlaceholder}
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10"
+              value={inputValue}
+              onChange={(e) => setInputValue(e.target.value)}
+              className="pl-11 rounded-full bg-white border-purple-200 focus:border-purple-400 focus:ring-purple-400"
             />
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 items-center">
             <Button
               variant={showArchived ? "default" : "outline"}
               onClick={() => setShowArchived(!showArchived)}
+              className={showArchived ? "bg-purple-600 hover:bg-purple-700 text-white rounded-lg" : "border-purple-200 text-purple-600 hover:bg-purple-50 rounded-lg"}
             >
               <Archive className="h-4 w-4 mr-2" />
               {t.library.archived}
             </Button>
             <Select value={sortBy} onValueChange={(value) => setSortBy(value as SortBy)}>
-              <SelectTrigger className="w-[180px]">
+              <SelectTrigger className="w-[180px] border-purple-200 text-purple-600 rounded-lg focus:ring-purple-400">
                 <SelectValue placeholder={t.library.sortBy} />
               </SelectTrigger>
               <SelectContent>
@@ -162,7 +172,10 @@ export default function LibraryPage() {
                 <SelectItem value="title">{t.library.sortTitle}</SelectItem>
               </SelectContent>
             </Select>
-            <Button onClick={() => window.location.href = "/"}>
+            <Button
+              onClick={() => window.location.href = "/"}
+              className="bg-gradient-to-r from-pink-500 to-purple-500 text-white rounded-lg hover:from-pink-600 hover:to-purple-600 shadow-md"
+            >
               <PlusCircle className="h-4 w-4 mr-2" />
               {t.library.createNew}
             </Button>
@@ -190,7 +203,7 @@ export default function LibraryPage() {
             {lessons.length === 0 ? (
               <EmptyLibraryState lang={lang} />
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {lessons.map((lesson) => (
                   <LessonCard
                     key={lesson.id}
@@ -217,7 +230,7 @@ export default function LibraryPage() {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>{t.library.cancel}</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDeleteConfirm}>{t.library.delete}</AlertDialogAction>
+            <AlertDialogAction onClick={handleDeleteConfirm} className="bg-purple-600 hover:bg-purple-700">{t.library.delete}</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

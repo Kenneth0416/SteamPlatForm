@@ -28,6 +28,14 @@ interface LessonRequirementsFormProps {
   onSwitchToChat?: () => void
 }
 
+const domainColors: Record<STEAMDomain, string> = {
+  S: "data-[state=checked]:bg-blue-500 data-[state=checked]:border-blue-500 border-blue-400",
+  T: "data-[state=checked]:bg-green-500 data-[state=checked]:border-green-500 border-green-400",
+  E: "data-[state=checked]:bg-orange-500 data-[state=checked]:border-orange-500 border-orange-400",
+  A: "data-[state=checked]:bg-pink-500 data-[state=checked]:border-pink-500 border-pink-400",
+  M: "data-[state=checked]:bg-purple-500 data-[state=checked]:border-purple-500 border-purple-400",
+}
+
 export function LessonRequirementsForm({
   lang,
   onGenerate,
@@ -130,6 +138,9 @@ export function LessonRequirementsForm({
     }
   }
 
+  const inputClassName = "border-purple-200 focus:border-purple-500 focus:ring-purple-500 rounded-lg"
+  const selectTriggerClassName = "border-purple-200 focus:border-purple-500 focus:ring-purple-500 rounded-lg"
+
   const renderStepContent = () => {
     switch (currentStep) {
       case 1:
@@ -137,9 +148,9 @@ export function LessonRequirementsForm({
           <div className="space-y-6">
             {/* Grade Level */}
             <div className="space-y-2">
-              <Label>{t.gradeLevel}</Label>
+              <Label className="text-sm font-semibold text-purple-900">{t.gradeLevel}</Label>
               <Select value={gradeLevel} onValueChange={(value) => setGradeLevel(value as GradeLevel)}>
-                <SelectTrigger>
+                <SelectTrigger className={selectTriggerClassName}>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -153,19 +164,20 @@ export function LessonRequirementsForm({
 
             {/* Number of Sessions */}
             <div className="space-y-2">
-              <Label>{t.numberOfSessions}</Label>
+              <Label className="text-sm font-semibold text-purple-900">{t.numberOfSessions}</Label>
               <Input
                 type="number"
                 min="1"
                 value={numberOfSessions || ''}
                 onChange={(e) => setNumberOfSessions(e.target.value ? Number.parseInt(e.target.value) : 0)}
                 onBlur={(e) => !e.target.value && setNumberOfSessions(3)}
+                className={inputClassName}
               />
             </div>
 
             {/* Duration per Session */}
             <div className="space-y-2">
-              <Label>{t.durationPerSession}</Label>
+              <Label className="text-sm font-semibold text-purple-900">{t.durationPerSession}</Label>
               <Input
                 type="number"
                 min="15"
@@ -173,18 +185,20 @@ export function LessonRequirementsForm({
                 value={durationPerSession || ''}
                 onChange={(e) => setDurationPerSession(e.target.value ? Number.parseInt(e.target.value) : 0)}
                 onBlur={(e) => !e.target.value && setDurationPerSession(45)}
+                className={inputClassName}
               />
             </div>
 
             {/* Class Size */}
             <div className="space-y-2">
-              <Label>{t.classSize}</Label>
+              <Label className="text-sm font-semibold text-purple-900">{t.classSize}</Label>
               <Input
                 type="number"
                 min="1"
                 value={classSize}
                 onChange={(e) => setClassSize(e.target.value)}
                 placeholder="20-30"
+                className={inputClassName}
               />
             </div>
           </div>
@@ -194,8 +208,8 @@ export function LessonRequirementsForm({
         return (
           <div className="space-y-6">
             {/* STEAM Domains */}
-            <div className="space-y-2">
-              <Label>{t.steamDomains}</Label>
+            <div className="space-y-3">
+              <Label className="text-sm font-semibold text-purple-900">{t.steamDomains}</Label>
               <div className="flex flex-wrap gap-4">
                 {(["S", "T", "E", "A", "M"] as STEAMDomain[]).map((domain) => (
                   <div key={domain} className="flex items-center space-x-2">
@@ -203,8 +217,9 @@ export function LessonRequirementsForm({
                       id={`domain-${domain}`}
                       checked={steamDomains.includes(domain)}
                       onCheckedChange={() => toggleDomain(domain)}
+                      className={`rounded ${domainColors[domain]}`}
                     />
-                    <label htmlFor={`domain-${domain}`} className="text-sm cursor-pointer">
+                    <label htmlFor={`domain-${domain}`} className="text-sm cursor-pointer font-medium text-gray-700">
                       {t.domains[domain]}
                     </label>
                   </div>
@@ -214,22 +229,23 @@ export function LessonRequirementsForm({
 
             {/* Lesson Topic */}
             <div className="space-y-2">
-              <Label>{t.lessonTopic}</Label>
+              <Label className="text-sm font-semibold text-purple-900">{t.lessonTopic}</Label>
               <Input
                 value={lessonTopic}
                 onChange={(e) => setLessonTopic(e.target.value)}
                 placeholder={t.topicPlaceholder}
+                className={inputClassName}
               />
             </div>
 
             {/* Notes for AI */}
             <div className="space-y-2">
-              <Label>{t.notes}</Label>
+              <Label className="text-sm font-semibold text-purple-900">{t.notes}</Label>
               <Textarea
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
                 placeholder={t.notesPlaceholder}
-                className="min-h-[80px] resize-none"
+                className="min-h-[80px] resize-none border-purple-200 focus:border-purple-500 focus:ring-purple-500 rounded-lg"
               />
             </div>
           </div>
@@ -239,8 +255,8 @@ export function LessonRequirementsForm({
         return (
           <div className="space-y-6">
             {/* School Themes */}
-            <div className="space-y-2">
-              <Label>{t.schoolThemes}</Label>
+            <div className="space-y-3">
+              <Label className="text-sm font-semibold text-purple-900">{t.schoolThemes}</Label>
               <div className="space-y-2">
                 {t.themesList.map((theme) => (
                   <div key={theme} className="flex items-center space-x-2">
@@ -248,8 +264,9 @@ export function LessonRequirementsForm({
                       id={`theme-${theme}`}
                       checked={schoolThemes.includes(theme)}
                       onCheckedChange={() => toggleTheme(theme)}
+                      className="data-[state=checked]:bg-purple-500 data-[state=checked]:border-purple-500 border-purple-400 rounded"
                     />
-                    <label htmlFor={`theme-${theme}`} className="text-sm cursor-pointer">
+                    <label htmlFor={`theme-${theme}`} className="text-sm cursor-pointer font-medium text-gray-700">
                       {theme}
                     </label>
                   </div>
@@ -259,12 +276,12 @@ export function LessonRequirementsForm({
 
             {/* Teaching Approach */}
             <div className="space-y-2">
-              <Label>{t.teachingApproach}</Label>
+              <Label className="text-sm font-semibold text-purple-900">{t.teachingApproach}</Label>
               <Select
                 value={teachingApproach}
                 onValueChange={(value) => setTeachingApproach(value as TeachingApproach)}
               >
-                <SelectTrigger>
+                <SelectTrigger className="bg-purple-100 text-purple-700 rounded-full px-4 border-purple-200 focus:ring-purple-500">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -279,9 +296,9 @@ export function LessonRequirementsForm({
 
             {/* Difficulty Level */}
             <div className="space-y-2">
-              <Label>{t.difficultyLevel}</Label>
+              <Label className="text-sm font-semibold text-purple-900">{t.difficultyLevel}</Label>
               <Select value={difficultyLevel} onValueChange={(value) => setDifficultyLevel(value as DifficultyLevel)}>
-                <SelectTrigger>
+                <SelectTrigger className="bg-purple-100 text-purple-700 rounded-full px-4 border-purple-200 focus:ring-purple-500">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -300,21 +317,26 @@ export function LessonRequirementsForm({
   }
 
   return (
-    <Card className="h-full flex flex-col">
+    <Card className="h-full flex flex-col rounded-2xl shadow-lg shadow-purple-100/50 border-purple-100 bg-white">
       <CardHeader className="flex-shrink-0">
         <div className="flex items-center justify-between">
-          <CardTitle>{t.formTitle}</CardTitle>
-          <div className="text-sm text-muted-foreground">
+          <CardTitle className="text-lg font-bold text-purple-900">{t.formTitle}</CardTitle>
+          <div className="text-sm font-medium text-purple-500">
             {t.step} {currentStep} {t.of} {totalSteps}
           </div>
         </div>
-        <p className="text-sm text-muted-foreground mt-1">
+        <p className="text-sm text-purple-400 mt-1">
           {currentStep === 1 && t.stepTitles.basic}
           {currentStep === 2 && t.stepTitles.topic}
           {currentStep === 3 && t.stepTitles.settings}
         </p>
         {currentStep === 1 && (
-          <Button variant="outline" size="sm" onClick={handleFillExample} className="mt-2 w-full bg-transparent">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleFillExample}
+            className="mt-2 w-full bg-gradient-to-r from-pink-500 to-purple-500 text-white border-0 rounded-lg hover:from-pink-600 hover:to-purple-600 hover:text-white"
+          >
             {t.fillExample}
           </Button>
         )}
@@ -326,9 +348,13 @@ export function LessonRequirementsForm({
           </div>
         </div>
 
-        <div className="pt-4 mt-4 border-t flex-shrink-0 space-y-3">
+        <div className="pt-4 mt-4 border-t border-purple-100 flex-shrink-0 space-y-3">
           {hasExistingLesson && onSwitchToChat && (
-            <Button variant="secondary" onClick={onSwitchToChat} className="w-full">
+            <Button
+              variant="secondary"
+              onClick={onSwitchToChat}
+              className="w-full bg-purple-50 text-purple-700 hover:bg-purple-100"
+            >
               <MessageSquare className="w-4 h-4 mr-2" />
               {t.continueEditing || "Continue Editing"}
             </Button>
@@ -339,27 +365,33 @@ export function LessonRequirementsForm({
                 variant="outline"
                 onClick={handlePrevious}
                 disabled={currentStep === 1}
-                className="flex-1 bg-transparent"
+                className="flex-1 rounded-full border-pink-300 text-purple-700 bg-transparent hover:bg-purple-50 disabled:opacity-40"
               >
                 <ChevronLeft className="w-4 h-4 mr-1" />
                 {t.previous}
               </Button>
-              <Button variant="destructive" onClick={handleNext} className="flex-1">
+              <Button
+                onClick={handleNext}
+                className="flex-1 rounded-full bg-gradient-to-r from-purple-500 to-pink-500 text-white hover:from-purple-600 hover:to-pink-600 border-0"
+              >
                 {t.next}
                 <ChevronRight className="w-4 h-4 ml-1" />
               </Button>
             </div>
           ) : (
-            <div className="flex gap-3">
-              <Button variant="outline" onClick={handlePrevious} className="flex-1 bg-transparent">
+            <div className="flex flex-col gap-3">
+              <Button
+                variant="outline"
+                onClick={handlePrevious}
+                className="rounded-full border-pink-300 text-purple-700 bg-transparent hover:bg-purple-50"
+              >
                 <ChevronLeft className="w-4 h-4 mr-1" />
                 {t.previous}
               </Button>
               <Button
-                variant="outline"
                 onClick={handleGenerate}
                 disabled={isGenerating || !lessonTopic}
-                className="flex-1 bg-transparent"
+                className="w-full rounded-full bg-gradient-to-r from-purple-500 to-pink-500 text-white hover:from-purple-600 hover:to-pink-600 border-0 disabled:opacity-50"
               >
                 {isGenerating ? t.generating : t.generateLesson}
               </Button>

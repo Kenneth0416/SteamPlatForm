@@ -9,6 +9,8 @@ jest.mock('@langchain/core/tools', () => ({
   })),
 }))
 
+import { ReadCache, ToolTrace } from '../../lib/editor/agent/runtime'
+
 describe('ToolContext interface', () => {
   it('should support onDiffCreated callback', async () => {
     const { createEditorTools } = await import('../../lib/editor/tools')
@@ -24,7 +26,9 @@ describe('ToolContext interface', () => {
       blockIndex,
       guard,
       pendingDiffs,
+      readCache: new ReadCache(),
       onDiffCreated: (diff: unknown) => createdDiffs.push(diff),
+      blockIdCounter: 0,
     }
 
     const tools = createEditorTools(ctx)
@@ -40,6 +44,8 @@ describe('ToolContext interface', () => {
       blockIndex: new BlockIndexService([]),
       guard: new ReadWriteGuard(),
       pendingDiffs: [],
+      readCache: new ReadCache(),
+      blockIdCounter: 0,
     }
 
     const tools = createEditorTools(ctx)
@@ -47,6 +53,24 @@ describe('ToolContext interface', () => {
 
     expect(toolNames).toContain('read_blocks')
     expect(toolNames).toContain('edit_blocks')
+  })
+})
+
+describe('Runtime utilities', () => {
+  it('should shift entries when exceeding max size', () => {
+    const trace = new ToolTrace(1)
+    trace.add({ name: 'list_blocks', args: {}, status: 'success', timestamp: 1 })
+    trace.add({ name: 'read_blocks', args: { blockIds: ['b1'] }, status: 'success', timestamp: 2 })
+
+    expect(trace.size()).toBe(1)
+  })
+
+  it('should report cache presence and size', () => {
+    const cache = new ReadCache()
+    cache.set('b1', 'content')
+
+    expect(cache.has('b1')).toBe(true)
+    expect(cache.size()).toBe(1)
   })
 })
 
@@ -73,6 +97,8 @@ describe('Error Recovery', () => {
         blockIndex,
         guard,
         pendingDiffs,
+        readCache: new ReadCache(),
+        blockIdCounter: 0,
       }
 
       const tools = createEditorTools(ctx)
@@ -150,6 +176,8 @@ describe('Error Recovery', () => {
         blockIndex: blockIndexA,
         guard,
         pendingDiffs,
+        readCache: new ReadCache(),
+        blockIdCounter: 0,
       }
 
       // Create tools for document A
@@ -177,6 +205,8 @@ describe('Error Recovery', () => {
         blockIndex: blockIndexB,
         guard,
         pendingDiffs,
+        readCache: new ReadCache(),
+        blockIdCounter: 0,
       }
 
       const toolsB = createEditorTools(ctxB)

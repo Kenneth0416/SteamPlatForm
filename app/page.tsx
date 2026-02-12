@@ -317,14 +317,14 @@ export default function Home() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col bg-background">
+    <div className="min-h-screen bg-[#f0e6ff] bg-bubbles">
       <Header lang={currentLang} onLangChange={setCurrentLang} />
 
       {/* Main Content */}
-      <main className="flex-1 container mx-auto px-4 py-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {/* Left Column - Form or Chat */}
-          <div className="h-[calc(100vh-180px)]">
+      <main className="relative z-10 flex gap-6 p-6 pb-20">
+        {/* Left Panel - Form or Chat */}
+        <div className="w-[40%] min-w-[380px] h-[calc(100vh-180px)]">
+          <div className="bg-white rounded-2xl shadow-lg shadow-purple-200/50 p-6 h-full">
             {showForm ? (
               <div key="form" className="h-full animate-in fade-in slide-in-from-left-4 duration-500">
                 <LessonRequirementsForm
@@ -351,9 +351,11 @@ export default function Home() {
               </div>
             )}
           </div>
+        </div>
 
-          {/* Right Column - Lesson Preview */}
-          <div className="h-[calc(100vh-180px)]">
+        {/* Right Panel - Lesson Preview */}
+        <div className="flex-1 h-[calc(100vh-180px)]">
+          <div className="bg-white rounded-2xl shadow-lg shadow-purple-200/50 p-6 h-full">
             <LessonPreview
               lang={currentLang}
               lesson={isDocumentStreaming ? storeMarkdown : currentLesson}

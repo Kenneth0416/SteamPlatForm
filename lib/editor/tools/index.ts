@@ -2,14 +2,17 @@ import { DynamicStructuredTool } from '@langchain/core/tools'
 import { z } from 'zod'
 import { BlockIndexService } from '../block-index'
 import { ReadWriteGuard } from './middleware'
-import type { Block, PendingDiff, BlockType } from '../types'
+import type { ReadCache } from '../agent/runtime'
+import type { Block, PendingDiff, BlockType, ToolContextState } from '../types'
 
 const MAX_BATCH_SIZE = 25
+const MAX_CONTENT_LENGTH = 50000
 
-export interface ToolContext {
+export interface ToolContext extends ToolContextState {
   blockIndex: BlockIndexService
   guard: ReadWriteGuard
   pendingDiffs: PendingDiff[]
+  readCache: ReadCache
   onDiffCreated?: (diff: PendingDiff) => void
 }
 
@@ -18,9 +21,10 @@ function generateDiffId(): string {
 }
 
 // Block ID generator for add_blocks tool
-let blockIdCounter = 0
-function generateBlockId(): string {
-  return `block-${Date.now()}-${blockIdCounter++}`
+function generateBlockId(ctx: ToolContext): string {
+  const blockId = `block-${Date.now()}-${ctx.blockIdCounter}`
+  ctx.blockIdCounter += 1
+  return blockId
 }
 
 export function createListBlocksTool(ctx: ToolContext) {
@@ -49,17 +53,44 @@ export function createReadBlocksTool(ctx: ToolContext) {
     }),
     func: async ({ blockIds, withContext }) => {
       const ids = blockIds.slice(0, MAX_BATCH_SIZE)
+      const includeContext = Boolean(withContext)
+      const pendingDiffsVersion = ctx.pendingDiffs.length
+
       ctx.guard.markDocumentRead()
       ctx.guard.markBlocksRead(ids)
 
       const blocks = ids.map((id) => {
+        const cacheKey = `${id}:${includeContext ? '1' : '0'}:${pendingDiffsVersion}`
+        const cached = ctx.readCache.get(cacheKey)
+        if (cached) {
+          const cachedBlock = JSON.parse(cached) as {
+            id: string
+            ok: boolean
+            type?: BlockType
+            content?: string
+            error?: string
+            contextBefore?: { id: string; preview: string }[]
+            contextAfter?: { id: string; preview: string }[]
+          }
+          if (includeContext) {
+            const ctxIds = [
+              ...(cachedBlock.contextBefore ?? []).map(b => b.id),
+              ...(cachedBlock.contextAfter ?? []).map(b => b.id),
+            ]
+            ctx.guard.markBlocksRead(ctxIds)
+          }
+          return cachedBlock
+        }
+
         const result = ctx.blockIndex.getWithContext(id)
         if (!result.block) {
-          return { id, ok: false, error: 'Block not found' }
+          const missing = { id, ok: false, error: 'Block not found' }
+          ctx.readCache.set(cacheKey, JSON.stringify(missing))
+          return missing
         }
 
         // Mark context blocks as read
-        if (withContext) {
+        if (includeContext) {
           const ctxIds = [
             ...result.before.map(b => b.id),
             ...result.after.map(b => b.id),
@@ -70,14 +101,16 @@ export function createReadBlocksTool(ctx: ToolContext) {
         // Use effective content (with pending overlay)
         const content = ctx.blockIndex.getEffectiveContent(id, ctx.pendingDiffs) ?? result.block.content
 
-        return {
+        const blockData = {
           id,
           ok: true,
           type: result.block.type,
           content,
-          contextBefore: withContext ? result.before.map(b => ({ id: b.id, preview: b.content.slice(0, 30) })) : undefined,
-          contextAfter: withContext ? result.after.map(b => ({ id: b.id, preview: b.content.slice(0, 30) })) : undefined,
+          contextBefore: includeContext ? result.before.map(b => ({ id: b.id, preview: b.content.slice(0, 30) })) : undefined,
+          contextAfter: includeContext ? result.after.map(b => ({ id: b.id, preview: b.content.slice(0, 30) })) : undefined,
         }
+        ctx.readCache.set(cacheKey, JSON.stringify(blockData))
+        return blockData
       })
 
       return JSON.stringify({ blocks }, null, 2)
@@ -98,11 +131,17 @@ export function createEditBlocksTool(ctx: ToolContext) {
     }),
     func: async ({ edits }) => {
       const batch = edits.slice(0, MAX_BATCH_SIZE)
+      let didMutate = false
 
       const results = batch.map((e) => {
         const check = ctx.guard.canEdit(e.blockId)
         if (!check.allowed) {
           return { blockId: e.blockId, ok: false, error: check.error }
+        }
+
+        // Validate content length
+        if (e.newContent.length > MAX_CONTENT_LENGTH) {
+          return { blockId: e.blockId, ok: false, error: `Content exceeds maximum length of ${MAX_CONTENT_LENGTH} characters` }
         }
 
         // Use effective content for oldContent (with pending overlay)
@@ -121,8 +160,13 @@ export function createEditBlocksTool(ctx: ToolContext) {
         }
         ctx.pendingDiffs.push(diff)
         ctx.onDiffCreated?.(diff)
+        didMutate = true
         return { blockId: e.blockId, ok: true, diffId: diff.id }
       })
+
+      if (didMutate) {
+        ctx.readCache.invalidate()
+      }
 
       return JSON.stringify({ results }, null, 2)
     },
@@ -144,6 +188,7 @@ export function createAddBlocksTool(ctx: ToolContext) {
     }),
     func: async ({ additions }) => {
       const batch = additions.slice(0, MAX_BATCH_SIZE)
+      let didMutate = false
 
       // Track the last successfully added block's ID for auto-chaining
       let lastAddedBlockId: string | null = null
@@ -152,6 +197,11 @@ export function createAddBlocksTool(ctx: ToolContext) {
         // Validate content is not empty or whitespace-only
         if (!a.content.trim()) {
           return { afterBlockId: a.afterBlockId, ok: false, error: 'Content cannot be empty or whitespace-only' }
+        }
+
+        // Validate content length
+        if (a.content.length > MAX_CONTENT_LENGTH) {
+          return { afterBlockId: a.afterBlockId, ok: false, error: `Content exceeds maximum length of ${MAX_CONTENT_LENGTH} characters` }
         }
 
         const check = ctx.guard.canAdd()
@@ -178,7 +228,7 @@ export function createAddBlocksTool(ctx: ToolContext) {
           }
         }
 
-        const newBlockId = generateBlockId() // pre-generate block ID
+        const newBlockId = generateBlockId(ctx) // pre-generate block ID
 
         const diff: PendingDiff = {
           id: generateDiffId(),
@@ -192,12 +242,17 @@ export function createAddBlocksTool(ctx: ToolContext) {
 
         ctx.pendingDiffs.push(diff)
         ctx.onDiffCreated?.(diff)
+        didMutate = true
 
         // Update tracking for auto-chaining
         lastAddedBlockId = newBlockId
 
         return { afterBlockId: a.afterBlockId, ok: true, diffId: diff.id, newBlockId }
       })
+
+      if (didMutate) {
+        ctx.readCache.invalidate()
+      }
 
       return JSON.stringify({ results }, null, 2)
     },
@@ -217,6 +272,7 @@ export function createDeleteBlocksTool(ctx: ToolContext) {
     func: async ({ deletions }) => {
       const batch = deletions.slice(0, MAX_BATCH_SIZE)
       const blockIds = batch.map(d => d.blockId)
+      let didMutate = false
 
       // Batch validation using canDeleteBlocks
       const validation = ctx.guard.canDeleteBlocks(blockIds)
@@ -248,9 +304,14 @@ export function createDeleteBlocksTool(ctx: ToolContext) {
 
         ctx.pendingDiffs.push(diff)
         ctx.onDiffCreated?.(diff)
+        didMutate = true
 
         return { blockId: d.blockId, ok: true, diffId: diff.id }
       })
+
+      if (didMutate) {
+        ctx.readCache.invalidate()
+      }
 
       return JSON.stringify({ results }, null, 2)
     },

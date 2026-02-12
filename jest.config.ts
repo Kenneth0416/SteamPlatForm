@@ -17,6 +17,12 @@ const config: Config = {
   ],
   collectCoverageFrom: (() => {
     const argv = process.argv.join(' ')
+    if (argv.match(/__tests__\/editor\/(tools|agent)\.test\.ts/i)) {
+      return [
+        'lib/editor/tools/index.ts',
+        'lib/editor/agent/runtime.ts',
+      ]
+    }
     if (argv.match(/testPathPattern=.*lesson-preview/i)) {
       return ['components/steam-agent/lesson-preview.tsx']
     }

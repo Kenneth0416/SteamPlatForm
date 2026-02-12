@@ -2,7 +2,7 @@ import { BlockIndexService } from './block-index'
 import { ReadWriteGuard } from './tools/middleware'
 import { createEditorTools, ToolContext, createListDocumentsTool, createSwitchDocumentTool, MultiDocToolContext } from './tools'
 import { DocumentManager } from './document-manager'
-import { ToolTrace, detectStuck } from './agent/runtime'
+import { ToolTrace, ReadCache, detectStuck } from './agent/runtime'
 import { createLLMClient } from '@/lib/langchain/llm-factory'
 import { HumanMessage, AIMessage, SystemMessage, ToolMessage } from '@langchain/core/messages'
 import type { Block, PendingDiff, EditorDocument } from './types'
@@ -108,11 +108,14 @@ export async function runEditorAgent(
   const blockIndex = new BlockIndexService(blocks)
   const guard = new ReadWriteGuard()
   const pendingDiffs: PendingDiff[] = []
+  const readCache = new ReadCache()
 
   const ctx: ToolContext = {
     blockIndex,
     guard,
     pendingDiffs,
+    readCache,
+    blockIdCounter: 0,
   }
 
   const tools = createEditorTools(ctx)
@@ -232,6 +235,7 @@ export async function* runEditorAgentStream(
   const blockIndex = new BlockIndexService(blocks)
   const guard = new ReadWriteGuard()
   const pendingDiffs: PendingDiff[] = []
+  const readCache = new ReadCache()
   const yieldedDiffIds = new Set<string>()
 
   // Queue for diffs to yield immediately
@@ -241,6 +245,8 @@ export async function* runEditorAgentStream(
     blockIndex,
     guard,
     pendingDiffs,
+    readCache,
+    blockIdCounter: 0,
     onDiffCreated: (diff) => {
       diffQueue.push(diff)
     },
@@ -393,6 +399,7 @@ export async function* runMultiDocAgentStream(
 
   let blockIndex = new BlockIndexService(activeDoc.blocks)
   const guard = new ReadWriteGuard()
+  const readCache = new ReadCache()
   const pendingDiffsByDoc = new Map<string, PendingDiff[]>()
   documents.forEach(d => pendingDiffsByDoc.set(d.id, []))
 
@@ -408,6 +415,8 @@ export async function* runMultiDocAgentStream(
     guard,
     pendingDiffs: currentPendingDiffs,
     pendingDiffsByDoc,
+    readCache,
+    blockIdCounter: 0,
     onDiffCreated: (diff) => {
       const docId = documentManager.getActiveDocId()
       const enrichedDiff = { ...diff, docId }

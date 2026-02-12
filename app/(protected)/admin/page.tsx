@@ -27,10 +27,10 @@ export default function AdminDashboard() {
   const t = getTranslation(currentLang).admin
 
   return (
-    <div className="space-y-6">
-      <h1 className="text-3xl font-bold">{t.dashboard}</h1>
+    <div className="space-y-6 min-h-screen bg-[#f0e6ff] p-6 bg-bubbles">
+      <h1 className="text-2xl font-bold text-purple-900">{t.dashboard}</h1>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
         <StatsCard title={t.stats.totalUsers} value={stats.totalUsers} icon={Users} />
         <StatsCard title={t.stats.totalLessons} value={stats.totalLessons} icon={BookOpen} />
         <StatsCard title={t.stats.newUsersThisWeek} value={stats.newUsersThisWeek} icon={TrendingUp} />

@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "web-search": {
+      "command": "npx",
+      "args": ["-y", "one-search-mcp"],
+      "env": {
+        "SEARCH_ENGINE": "duckduckgo",
+        "SEARCH_TIMEOUT": "30000",
+        "MAX_RESULTS": "10",
+        "LOG_LEVEL": "error"
+      }
+    }
+  }
+}

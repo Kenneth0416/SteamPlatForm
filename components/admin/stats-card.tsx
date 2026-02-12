@@ -1,5 +1,4 @@
 import type { LucideIcon } from "lucide-react"
-import { Card, CardContent } from "@/components/ui/card"
 
 interface StatsCardProps {
   title: string
@@ -9,18 +8,12 @@ interface StatsCardProps {
 
 export function StatsCard({ title, value, icon: Icon }: StatsCardProps) {
   return (
-    <Card>
-      <CardContent className="p-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-sm text-muted-foreground">{title}</p>
-            <p className="text-3xl font-bold mt-2">{value}</p>
-          </div>
-          <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center">
-            <Icon className="h-6 w-6 text-primary" />
-          </div>
-        </div>
-      </CardContent>
-    </Card>
+    <div className="relative rounded-2xl bg-gradient-to-br from-purple-500 to-purple-600 p-6 h-28 flex flex-col justify-between transition-all duration-200 hover:scale-105 hover:shadow-lg cursor-default">
+      <div className="absolute top-4 right-4">
+        <Icon className="h-8 w-8 text-white/60" />
+      </div>
+      <p className="text-sm font-medium text-white/80">{title}</p>
+      <p className="text-3xl font-bold text-white">{value}</p>
+    </div>
   )
 }

@@ -67,13 +67,13 @@ export default function LessonsManagement() {
   }
 
   return (
-    <div className="space-y-6">
-      <h1 className="text-3xl font-bold">{t.title}</h1>
+    <div className="space-y-6 min-h-screen bg-[#f0e6ff] p-6 bg-bubbles">
+      <h1 className="text-2xl font-bold text-purple-900">{t.title}</h1>
 
       {userIdFilter && (
-        <div className="bg-muted px-3 py-1 rounded-md text-sm w-fit">
+        <div className="bg-purple-100 text-purple-800 px-3 py-1 rounded-md text-sm w-fit">
           Filtering by User ID: {userIdFilter}
-          <Button variant="link" className="h-auto p-0 ml-2" onClick={() => (window.location.href = "/admin/lessons")}>
+          <Button variant="link" className="h-auto p-0 ml-2 text-purple-600" onClick={() => (window.location.href = "/admin/lessons")}>
             Clear
           </Button>
         </div>
@@ -83,49 +83,64 @@ export default function LessonsManagement() {
         placeholder={t.searchPlaceholder}
         value={searchQuery}
         onChange={(e) => setSearchQuery(e.target.value)}
-        className="max-w-sm"
+        className="max-w-sm rounded-full bg-white border-purple-300 focus:border-purple-500 focus:ring-purple-500"
       />
 
-      <div className="border rounded-lg">
+      <div className="bg-white rounded-2xl overflow-hidden shadow-sm">
         <Table>
           <TableHeader>
-            <TableRow>
-              <TableHead>{t.title_col}</TableHead>
-              <TableHead>{t.grade}</TableHead>
-              <TableHead>{t.domains}</TableHead>
-              <TableHead>{t.createdAt}</TableHead>
-              <TableHead>{t.actions}</TableHead>
+            <TableRow className="bg-purple-50 border-b border-purple-100">
+              <TableHead className="text-purple-700 font-semibold">{t.title_col}</TableHead>
+              <TableHead className="text-purple-700 font-semibold">{t.grade}</TableHead>
+              <TableHead className="text-purple-700 font-semibold">{t.domains}</TableHead>
+              <TableHead className="text-purple-700 font-semibold">{t.createdAt}</TableHead>
+              <TableHead className="text-purple-700 font-semibold">{t.actions}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {filteredLessons.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={5} className="text-center text-muted-foreground">
+                <TableCell colSpan={5} className="text-center text-purple-400">
                   {t.noLessons}
                 </TableCell>
               </TableRow>
             ) : (
-              filteredLessons.map((lesson) => (
-                <TableRow key={lesson.id}>
+              filteredLessons.map((lesson) => {
+                const domainColors: Record<string, string> = {
+                  S: "bg-blue-100 text-blue-700",
+                  T: "bg-green-100 text-green-700",
+                  E: "bg-orange-100 text-orange-700",
+                  A: "bg-pink-100 text-pink-700",
+                  M: "bg-purple-100 text-purple-700",
+                }
+                return (
+                <TableRow key={lesson.id} className="hover:bg-purple-50/50 border-b border-purple-100">
                   <TableCell className="font-medium">{lesson.title || "Untitled"}</TableCell>
                   <TableCell>{lesson.requirements?.gradeLevel || "-"}</TableCell>
                   <TableCell>
                     <div className="flex gap-1">
                       {lesson.requirements?.steamDomains?.map((domain: string) => (
-                        <Badge key={domain} variant="outline">
+                        <span
+                          key={domain}
+                          className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${domainColors[domain] || "bg-gray-100 text-gray-700"}`}
+                        >
                           {domain}
-                        </Badge>
+                        </span>
                       )) || "-"}
                     </div>
                   </TableCell>
                   <TableCell>{format(new Date(lesson.createdAt), "MMM d, yyyy")}</TableCell>
                   <TableCell>
-                    <Button variant="outline" size="sm" onClick={() => handleDeleteClick(lesson.id)}>
+                    <button
+                      className="px-3 py-1 text-sm bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
+                      onClick={() => handleDeleteClick(lesson.id)}
+                    >
                       {t.delete}
-                    </Button>
+                    </button>
                   </TableCell>
                 </TableRow>
-              ))
+                )
+              })
             )}
           </TableBody>
         </Table>

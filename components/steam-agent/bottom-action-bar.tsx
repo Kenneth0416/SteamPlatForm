@@ -164,56 +164,72 @@ export function BottomActionBar({
   }
 
   return (
-    <div className="border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-      <div className="container mx-auto px-4 py-3">
-        <div className="flex flex-wrap gap-2 justify-between items-center">
-          <Button asChild variant="outline" size="sm">
-            <Link href="/library">
-              <Library className="h-4 w-4 mr-2" />
-              {t.library.myLessons}
-            </Link>
-          </Button>
+    <div className="fixed bottom-0 left-0 right-0 z-50 border-t border-purple-200 bg-white/80 backdrop-blur-md">
+      <div className="mx-auto flex items-center justify-between px-6 py-3">
+        <Button
+          asChild
+          variant="ghost"
+          size="sm"
+          className="text-purple-600 hover:text-purple-700 hover:bg-purple-50"
+        >
+          <Link href="/library">
+            <Library className="h-4 w-4 mr-2" />
+            {t.library.myLessons}
+          </Link>
+        </Button>
 
-          <div className="flex flex-wrap gap-2">
-            <Button onClick={handleSave} disabled={!currentLesson || isSaving} variant="default" size="sm">
-              {isSaving ? (
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              ) : (
-                <Save className="h-4 w-4 mr-2" />
-              )}
-              {t.save}
-            </Button>
-            <Button
-              onClick={runPdfExport}
-              disabled={!hasLessonContent || isExportingPdf || isExportingWord}
-              variant="outline"
-              size="sm"
-            >
-              {isExportingPdf ? (
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              ) : (
-                <FileDown className="h-4 w-4 mr-2" />
-              )}
-              {t.exportPdf}
-            </Button>
-            <Button
-              onClick={runWordExport}
-              disabled={!hasLessonContent || isExportingPdf || isExportingWord}
-              variant="outline"
-              size="sm"
-            >
-              {isExportingWord ? (
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              ) : (
-                <FileDown className="h-4 w-4 mr-2" />
-              )}
-              {t.exportWord}
-            </Button>
-            <Button onClick={handleDuplicate} disabled={!currentLesson} variant="outline" size="sm">
-              <Copy className="h-4 w-4 mr-2" />
-              {t.duplicate}
-            </Button>
-          </div>
+        <div className="flex flex-wrap items-center gap-3">
+          <Button
+            onClick={handleSave}
+            disabled={!currentLesson || isSaving}
+            size="sm"
+            className="bg-gradient-to-r from-pink-500 to-purple-500 text-white rounded-lg border-0 shadow-sm hover:shadow-md hover:scale-105 transition-all duration-200 disabled:opacity-50 disabled:hover:scale-100"
+          >
+            {isSaving ? (
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            ) : (
+              <Save className="h-4 w-4 mr-2" />
+            )}
+            {t.save}
+          </Button>
+          <Button
+            onClick={runPdfExport}
+            disabled={!hasLessonContent || isExportingPdf || isExportingWord}
+            variant="outline"
+            size="sm"
+            className="border-purple-300 text-purple-700 rounded-lg hover:bg-purple-50 hover:border-purple-400 hover:shadow-md hover:scale-105 transition-all duration-200 disabled:opacity-50 disabled:hover:scale-100"
+          >
+            {isExportingPdf ? (
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            ) : (
+              <FileDown className="h-4 w-4 mr-2" />
+            )}
+            {t.exportPdf}
+          </Button>
+          <Button
+            onClick={runWordExport}
+            disabled={!hasLessonContent || isExportingPdf || isExportingWord}
+            variant="outline"
+            size="sm"
+            className="border-purple-300 text-purple-700 rounded-lg hover:bg-purple-50 hover:border-purple-400 hover:shadow-md hover:scale-105 transition-all duration-200 disabled:opacity-50 disabled:hover:scale-100"
+          >
+            {isExportingWord ? (
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            ) : (
+              <FileDown className="h-4 w-4 mr-2" />
+            )}
+            {t.exportWord}
+          </Button>
+          <Button
+            onClick={handleDuplicate}
+            disabled={!currentLesson}
+            variant="outline"
+            size="sm"
+            className="border-purple-300 text-purple-700 rounded-lg hover:bg-purple-50 hover:border-purple-400 hover:shadow-md hover:scale-105 transition-all duration-200 disabled:opacity-50 disabled:hover:scale-100"
+          >
+            <Copy className="h-4 w-4 mr-2" />
+            {t.duplicate}
+          </Button>
         </div>
       </div>
     </div>

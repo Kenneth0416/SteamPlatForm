@@ -27,8 +27,8 @@ export async function requireAdmin() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 
-  // Prisma enum uses uppercase values (USER, ADMIN)
-  if (session.user.role !== "ADMIN") {
+  // session.user.role is normalized to lowercase by auth.ts
+  if (session.user.role !== "admin") {
     return NextResponse.json({ error: "Forbidden - Admin access required" }, { status: 403 })
   }
 

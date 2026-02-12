@@ -2,7 +2,6 @@
 
 import { Lang, GradeLevel, STEAMDomain } from '@/types/lesson';
 import { getTranslation } from '@/lib/translations';
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
@@ -44,19 +43,19 @@ export function LessonFilters({
     selectedGrades.length > 0 || selectedDomains.length > 0 || showFavoritesOnly || selectedTags.length > 0;
 
   return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
-        <CardTitle className="text-base">{t.library.filters}</CardTitle>
+    <div className="rounded-2xl bg-white p-6 shadow-sm">
+      <div className="flex items-center justify-between pb-4">
+        <h3 className="text-base font-bold text-purple-600">{t.library.filters}</h3>
         {hasActiveFilters && (
-          <Button variant="ghost" size="sm" onClick={onClearFilters}>
+          <Button variant="ghost" size="sm" className="text-purple-600 hover:text-purple-800 hover:bg-purple-50" onClick={onClearFilters}>
             <X className="h-4 w-4 mr-1" />
             {t.library.clearFilters}
           </Button>
         )}
-      </CardHeader>
-      <CardContent className="space-y-6">
+      </div>
+      <div className="space-y-6">
         <div>
-          <Label className="text-sm font-semibold mb-3 block">{t.library.filterByGrade}</Label>
+          <Label className="text-sm font-semibold mb-3 block text-purple-600">{t.library.filterByGrade}</Label>
           <div className="space-y-2">
             {grades.map((grade) => (
               <div key={grade} className="flex items-center space-x-2">
@@ -64,6 +63,7 @@ export function LessonFilters({
                   id={`grade-${grade}`}
                   checked={selectedGrades.includes(grade)}
                   onCheckedChange={(checked) => onGradeChange(grade, checked as boolean)}
+                  className="accent-purple-600 border-purple-300 data-[state=checked]:bg-purple-600 data-[state=checked]:border-purple-600"
                 />
                 <Label
                   htmlFor={`grade-${grade}`}
@@ -76,8 +76,8 @@ export function LessonFilters({
           </div>
         </div>
 
-        <div>
-          <Label className="text-sm font-semibold mb-3 block">{t.library.filterByDomain}</Label>
+        <div className="border-t border-purple-100 pt-4">
+          <Label className="text-sm font-semibold mb-3 block text-purple-600">{t.library.filterByDomain}</Label>
           <div className="space-y-2">
             {domains.map((domain) => (
               <div key={domain} className="flex items-center space-x-2">
@@ -85,6 +85,7 @@ export function LessonFilters({
                   id={`domain-${domain}`}
                   checked={selectedDomains.includes(domain)}
                   onCheckedChange={(checked) => onDomainChange(domain, checked as boolean)}
+                  className="accent-purple-600 border-purple-300 data-[state=checked]:bg-purple-600 data-[state=checked]:border-purple-600"
                 />
                 <Label
                   htmlFor={`domain-${domain}`}
@@ -98,8 +99,8 @@ export function LessonFilters({
         </div>
 
         {availableTags.length > 0 && (
-          <div>
-            <Label className="text-sm font-semibold mb-3 block">{t.library.filterByTag}</Label>
+          <div className="border-t border-purple-100 pt-4">
+            <Label className="text-sm font-semibold mb-3 block text-purple-600">{t.library.filterByTag}</Label>
             <div className="space-y-2 max-h-32 overflow-y-auto">
               {availableTags.map((tag) => (
                 <div key={tag} className="flex items-center space-x-2">
@@ -107,6 +108,7 @@ export function LessonFilters({
                     id={`tag-${tag}`}
                     checked={selectedTags.includes(tag)}
                     onCheckedChange={(checked) => onTagChange(tag, checked as boolean)}
+                    className="accent-purple-600 border-purple-300 data-[state=checked]:bg-purple-600 data-[state=checked]:border-purple-600"
                   />
                   <Label
                     htmlFor={`tag-${tag}`}
@@ -120,19 +122,20 @@ export function LessonFilters({
           </div>
         )}
 
-        <div className="border-t pt-4">
+        <div className="border-t border-purple-100 pt-4">
           <div className="flex items-center space-x-2">
             <Checkbox
               id="show-favorites"
               checked={showFavoritesOnly}
               onCheckedChange={(checked) => onShowFavoritesChange(checked as boolean)}
+              className="accent-purple-600 border-purple-300 data-[state=checked]:bg-purple-600 data-[state=checked]:border-purple-600"
             />
             <Label htmlFor="show-favorites" className="text-sm font-normal cursor-pointer">
               {t.library.showFavorites}
             </Label>
           </div>
         </div>
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }
