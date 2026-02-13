@@ -26,7 +26,21 @@ RUN pnpm install --frozen-lockfile
 
 
 # ==========================================
-# Stage 3: Runner - 生产运行环境
+# Stage 3: Builder - 构建应用
+# ==========================================
+FROM base AS builder
+
+WORKDIR /app
+
+COPY --from=deps /app/node_modules ./node_modules
+COPY . .
+
+ENV NEXT_TELEMETRY_DISABLED=1
+RUN pnpm exec prisma generate && pnpm build
+
+
+# ==========================================
+# Stage 4: Runner - 生产运行环境
 # ==========================================
 FROM base AS runner
 
@@ -43,9 +57,9 @@ RUN addgroup --system --gid 1001 nodejs \
 # 复制依赖
 COPY --from=deps /app/node_modules ./node_modules
 
-# 复制预构建的产物
-COPY .next/standalone ./
-COPY .next/static ./.next/static
+# 复制构建产物
+COPY --from=builder /app/.next/standalone ./
+COPY --from=builder /app/.next/static ./.next/static
 COPY public ./public
 
 # 复制 Prisma schema、package.json 和 pnpm-lock.yaml（用于安装依赖）
