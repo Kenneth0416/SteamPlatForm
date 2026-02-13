@@ -4,11 +4,11 @@ import { auth } from "@/lib/auth"
 
 export async function GET(request: NextRequest) {
   const health = {
-    status: "healthy" as const,
+    status: "healthy" as "healthy" | "unhealthy",
     timestamp: new Date().toISOString(),
     checks: {
-      database: { status: "unknown" as const, details: {} as Record<string, unknown> },
-      auth: { status: "unknown" as const, details: {} as Record<string, unknown> },
+      database: { status: "unknown" as "healthy" | "unhealthy" | "unknown", details: {} as Record<string, unknown> },
+      auth: { status: "unknown" as "authenticated" | "unauthenticated" | "error" | "unknown", details: {} as Record<string, unknown> },
     },
   }
 
