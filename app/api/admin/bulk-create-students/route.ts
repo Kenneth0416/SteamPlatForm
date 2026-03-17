@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { auth } from "@/lib/auth"
+import { requireAdmin } from "@/lib/auth-helpers"
 import { prisma } from "@/lib/prisma"
 import bcrypt from "bcryptjs"
 import * as XLSX from "xlsx"
@@ -25,11 +25,8 @@ import path from "path"
  * }
  */
 export async function POST(request: NextRequest) {
-  // 臨時移除認證檢查以執行批量導入（一次性任務）
-  // const session = await auth()
-  // if (!session?.user) {
-  //   return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  // }
+  const authError = await requireAdmin()
+  if (authError) return authError
 
   try {
     const body = await request.json()

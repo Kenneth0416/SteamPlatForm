@@ -15,15 +15,26 @@ export async function getAllUsers(): Promise<StoredUser[]> {
 }
 
 // Get all lessons (admin only)
-export async function getAllLessons(): Promise<SavedLesson[]> {
+export async function getAllLessons(userId?: string): Promise<SavedLesson[]> {
   try {
-    const res = await fetch("/api/lessons")
+    const query = userId ? `?userId=${encodeURIComponent(userId)}` : ""
+    const res = await fetch(`/api/admin/lessons${query}`)
     if (!res.ok) throw new Error("Failed to fetch lessons")
     const data = await res.json()
     return data.lessons || []
   } catch (error) {
     console.error("Error fetching lessons:", error)
     return []
+  }
+}
+
+// Delete lesson as admin
+export async function deleteLessonAsAdmin(lessonId: string): Promise<void> {
+  try {
+    const res = await fetch(`/api/admin/lessons/${lessonId}`, { method: "DELETE" })
+    if (!res.ok) throw new Error("Failed to delete lesson")
+  } catch (error) {
+    console.error("Error deleting lesson as admin:", error)
   }
 }
 

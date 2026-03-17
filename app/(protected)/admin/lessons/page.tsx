@@ -16,8 +16,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
-import { getAllLessons } from "@/lib/adminStorage"
-import { deleteLesson } from "@/lib/api"
+import { getAllLessons, deleteLessonAsAdmin } from "@/lib/adminStorage"
 import { getTranslation } from "@/lib/translations"
 import type { Lang } from "@/types/lesson"
 import type { SavedLesson } from "@/types/lesson"
@@ -40,12 +39,8 @@ export default function LessonsManagement() {
   }, [userIdFilter])
 
   const loadLessons = async () => {
-    const allLessons = await getAllLessons()
-    if (userIdFilter) {
-      setLessons(allLessons.filter((l) => l.userId === userIdFilter))
-    } else {
-      setLessons(allLessons)
-    }
+    const allLessons = await getAllLessons(userIdFilter || undefined)
+    setLessons(allLessons)
   }
 
   const filteredLessons = lessons.filter((lesson) =>
@@ -59,7 +54,7 @@ export default function LessonsManagement() {
 
   const handleDeleteConfirm = async () => {
     if (lessonToDelete) {
-      await deleteLesson(lessonToDelete)
+      await deleteLessonAsAdmin(lessonToDelete)
       loadLessons()
       setDeleteDialogOpen(false)
       setLessonToDelete(null)
