@@ -72,6 +72,7 @@
     "dotenv": "^17.2.3",
     "embla-carousel-react": "8.5.1",
     "input-otp": "1.4.1",
+    "jszip": "^3.10.1",
     "langchain": "^1.2.2",
     "lucide-react": "^0.454.0",
     "marked": "^17.0.1",

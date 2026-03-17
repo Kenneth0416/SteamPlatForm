@@ -17,6 +17,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { getAllLessons, deleteLessonAsAdmin } from "@/lib/adminStorage"
+import { downloadBlob } from "@/lib/download"
 import { getTranslation } from "@/lib/translations"
 import type { Lang } from "@/types/lesson"
 import type { SavedLesson } from "@/types/lesson"
@@ -31,6 +32,7 @@ export default function LessonsManagement() {
   const [searchQuery, setSearchQuery] = useState("")
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [lessonToDelete, setLessonToDelete] = useState<string | null>(null)
+  const [isExporting, setIsExporting] = useState(false)
 
   const t = getTranslation(currentLang).admin.lessonsPage
 
@@ -61,9 +63,41 @@ export default function LessonsManagement() {
     }
   }
 
+  const handleExportAll = async () => {
+    if (isExporting) return
+    setIsExporting(true)
+    try {
+      const res = await fetch("/api/admin/export-lessons")
+      if (!res.ok) {
+        throw new Error("Failed to export lessons")
+      }
+
+      const blob = await res.blob()
+      const contentDisposition = res.headers.get("Content-Disposition") || ""
+      const match = /filename=\"([^\"]+)\"/.exec(contentDisposition)
+      const fallbackName = `lessons_export_${new Date().toISOString().replace(/[:.]/g, "-")}.zip`
+      const filename = match?.[1] ?? fallbackName
+
+      downloadBlob(blob, filename)
+    } catch (error) {
+      console.error("Error exporting lessons:", error)
+    } finally {
+      setIsExporting(false)
+    }
+  }
+
   return (
     <div className="space-y-6 min-h-screen bg-[#f0e6ff] p-6 bg-bubbles">
-      <h1 className="text-2xl font-bold text-purple-900">{t.title}</h1>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <h1 className="text-2xl font-bold text-purple-900">{t.title}</h1>
+        <Button
+          className="rounded-full bg-purple-600 text-white hover:bg-purple-700 disabled:opacity-60"
+          onClick={handleExportAll}
+          disabled={isExporting}
+        >
+          {isExporting ? t.exporting : t.exportAll}
+        </Button>
+      </div>
 
       {userIdFilter && (
         <div className="bg-purple-100 text-purple-800 px-3 py-1 rounded-md text-sm w-fit">
