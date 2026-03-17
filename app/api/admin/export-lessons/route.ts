@@ -16,6 +16,32 @@ type LessonPlan = {
   [key: string]: unknown
 }
 
+type ChatHistoryEntry = {
+  role: "user" | "assistant"
+  content: string
+  timestamp: string
+}
+
+type LessonExportMetadata = {
+  id: string
+  title: string
+  grade: string | null
+  gradeLevel: string | null
+  domains: string[]
+  steamDomains: string[]
+  createdAt: string
+  updatedAt: string
+  tags: string[]
+  isFavorite: boolean
+  isArchived: boolean
+  user: {
+    id: string
+    name: string
+    email: string
+  }
+  chatHistory: ChatHistoryEntry[]
+}
+
 function sanitizeSegment(value: string, fallback: string): string {
   const trimmed = value.trim()
   const cleaned = trimmed.replace(/[^a-zA-Z0-9-_]+/g, "_").replace(/^_+|_+$/g, "")
@@ -63,7 +89,9 @@ export async function GET(_request: NextRequest) {
 
       const requirements = lesson.requirements as LessonRequirements | null
 
-      const metadata = {
+      const chatHistory = Array.isArray(lesson.chatHistory) ? (lesson.chatHistory as ChatHistoryEntry[]) : []
+
+      const metadata: LessonExportMetadata = {
         id: lesson.id,
         title: lesson.title,
         grade: requirements?.gradeLevel ?? null,
@@ -80,6 +108,7 @@ export async function GET(_request: NextRequest) {
           name: lesson.user?.name ?? "",
           email: lesson.user?.email ?? "",
         },
+        chatHistory,
       }
 
       const folder = zip.folder(userFolderName)?.folder(lessonFolderName)
