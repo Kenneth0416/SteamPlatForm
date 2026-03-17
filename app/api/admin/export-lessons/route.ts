@@ -92,7 +92,7 @@ export async function GET(_request: NextRequest) {
     const buffer = await zip.generateAsync({ type: "nodebuffer", compression: "DEFLATE" })
     const filename = `lessons_export_${formatTimestamp(new Date())}.zip`
 
-    return new Response(buffer, {
+    return new Response(new Uint8Array(buffer), {
       status: 200,
       headers: {
         "Content-Type": "application/zip",
